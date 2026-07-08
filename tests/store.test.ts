@@ -31,3 +31,35 @@ test("buildDayContentはマーカー外の手書きを保持する", () => {
 	expect(next).toContain("ここは消えてはいけない");
 	expect(next).toContain("| 09:00 | 10:30 |");
 });
+
+test("説明の改行はserialize→parseで保持される（<br>ラウンドトリップ）", () => {
+	const orig = [s("09:00", "10:00", "Code", "行1\n行2")];
+	const table = serializeTable(orig);
+	expect(table).toContain("<br>");
+	expect(table).not.toContain("行1\n行2"); // 改行そのままでは表の行に書かれない
+	const parsed = parseSessions(table);
+	expect(parsed).toHaveLength(1);
+	expect(parsed[0].note).toBe("行1\n行2");
+});
+
+test("buildDayContentはfrontmatterと本文の間の空行を保持する（新規・再生成とも）", () => {
+	const initial = buildDayContent(null, "2026-07-09", [s("09:00", "10:00", "Code")]);
+	// frontmatter の閉じ --- の直後に空行がある
+	expect(initial).toMatch(/---\n\n/);
+
+	const regenerated = buildDayContent(initial, "2026-07-09", [s("09:00", "10:30", "Code")]);
+	expect(regenerated).toMatch(/---\n\n/);
+	expect(regenerated).toContain("| 09:00 | 10:30 |");
+});
+
+test("buildDayContentはfrontmatterのカスタムキーを再生成後も保持する", () => {
+	const initial = buildDayContent(null, "2026-07-09", [s("09:00", "10:00", "Code")]);
+	// frontmatter の閉じ --- の直前にカスタムキーを差し込む（開き --- には先頭改行が無いため、
+	// "\n---\n" は閉じ --- の前にのみ一致する）
+	const withCustomKey = initial.replace("\n---\n", "\nmood: good\n---\n");
+	expect(withCustomKey).toContain("mood: good");
+
+	const regenerated = buildDayContent(withCustomKey, "2026-07-09", [s("09:00", "10:30", "Code")]);
+	expect(regenerated).toContain("mood: good");
+	expect(regenerated).toContain("date: 2026-07-09");
+});
