@@ -13,7 +13,7 @@ function pad2(n: number): string {
 }
 
 /** ts のローカル日付を "YYYY-MM-DD" にする */
-function localDateStr(ts: number): string {
+export function localDateStr(ts: number): string {
 	const d = new Date(ts);
 	return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }

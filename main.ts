@@ -1,19 +1,14 @@
 import { Platform, Plugin } from "obsidian";
-import { aggregate } from "./src/aggregator";
+import { aggregate, localDateStr } from "./src/aggregator";
 import { writeDay } from "./src/store";
 import { Tracker, type TrackerState } from "./src/tracker";
-import { DEFAULT_SETTINGS, type Poll, type TimemeterSettings } from "./src/types";
+import { DEFAULT_SETTINGS, type Poll, type Session, type TimemeterSettings } from "./src/types";
 
 const AGGREGATE_INTERVAL_MS = 60 * 1000;
 
-function pad2(n: number): string {
-	return String(n).padStart(2, "0");
-}
-
-/** 今日のローカル日付を "YYYY-MM-DD" にする */
+/** 今日のローカル日付を "YYYY-MM-DD" にする（aggregator の localDateStr と同じ定義を再利用） */
 function todayStr(): string {
-	const d = new Date();
-	return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+	return localDateStr(Date.now());
 }
 
 export default class TimeMeterPlugin extends Plugin {
@@ -22,6 +17,7 @@ export default class TimeMeterPlugin extends Plugin {
 	trackerState: TrackerState = "rec";
 	polls: Poll[] = [];
 	laps: number[] = [];
+	aggregating = false;
 
 	async onload() {
 		await this.loadSettings();
@@ -62,12 +58,42 @@ export default class TimeMeterPlugin extends Plugin {
 	}
 
 	async aggregateNow(): Promise<void> {
-		const sessions = aggregate(this.polls, {
-			afkSec: this.settings.afkThresholdSec,
-			gapMin: this.settings.mergeGapMin,
-			laps: this.laps,
-		});
-		await writeDay(this.app, this.settings.dataFolder, todayStr(), sessions);
+		// 60秒インターバルと「今すぐ集計」コマンドが同時に走ると vault の
+		// read-modify-write が競合するため、多重実行をガードする。
+		if (this.aggregating) return;
+		this.aggregating = true;
+		try {
+			const sessions = aggregate(this.polls, {
+				afkSec: this.settings.afkThresholdSec,
+				gapMin: this.settings.mergeGapMin,
+				laps: this.laps,
+			});
+
+			// sessions は日付をまたぐ場合があるので、日付ごとに分けてそれぞれの
+			// 日付ファイルへ書き込む（日を跨いだまま単一日付に書くと過去日のデータが
+			// 当日ファイルへ混入する）。
+			const byDate = new Map<string, Session[]>();
+			for (const session of sessions) {
+				const existing = byDate.get(session.date);
+				if (existing) {
+					existing.push(session);
+				} else {
+					byDate.set(session.date, [session]);
+				}
+			}
+			for (const [date, dateSessions] of byDate) {
+				await writeDay(this.app, this.settings.dataFolder, date, dateSessions);
+			}
+
+			// 書き込み済みの過去日の poll は破棄し、当日分だけをバッファに残す。
+			// 当日分を残すのは、進行中セッションの開始時刻を安定させるため
+			// （store のマージは 開始|アプリ をキーにするので、同じ開始時刻を
+			// 保ち続けないと再集計のたびに別セッション扱いになってしまう）。
+			const today = todayStr();
+			this.polls = this.polls.filter((p) => localDateStr(p.ts) === today);
+		} finally {
+			this.aggregating = false;
+		}
 	}
 
 	async loadSettings() {

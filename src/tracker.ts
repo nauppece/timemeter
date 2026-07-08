@@ -21,6 +21,7 @@ export class Tracker {
 	private _currentStart: number | null = null;
 	private consecutiveFailures = 0;
 	private paused = false;
+	private ticking = false;
 
 	constructor(
 		intervalSec: number,
@@ -81,33 +82,41 @@ export class Tracker {
 	private async tick(): Promise<void> {
 		if (!Platform.isDesktopApp) return;
 		if (this.paused) return;
-
-		const idleSec = await getIdleSec();
-		if (idleSec >= this.afkSec) {
-			this.setState("afk");
-			return;
-		}
-
-		const app = await getFrontmostApp();
-		if (app === null) {
-			this.consecutiveFailures++;
-			if (this.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-				this.setState("err");
+		// 前回の tick の非同期処理（getIdleSec/getFrontmostApp/getWindowTitle）が
+		// 次のインターバルまでに解決しない場合、多重実行すると _currentApp/
+		// _currentStart/consecutiveFailures が競合する。1本だけ実行させる。
+		if (this.ticking) return;
+		this.ticking = true;
+		try {
+			const idleSec = await getIdleSec();
+			if (idleSec >= this.afkSec) {
+				this.setState("afk");
+				return;
 			}
-			return;
+
+			const app = await getFrontmostApp();
+			if (app === null) {
+				this.consecutiveFailures++;
+				if (this.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+					this.setState("err");
+				}
+				return;
+			}
+
+			this.consecutiveFailures = 0;
+			const title = await getWindowTitle();
+
+			const now = Date.now();
+			if (app !== this._currentApp) {
+				// アプリが変わった（初回 poll では _currentApp が null なのでここに入る）
+				this._currentStart = now;
+			}
+			this._currentApp = app;
+
+			this.setState("rec");
+			this.onPoll({ ts: now, app, title, idleSec });
+		} finally {
+			this.ticking = false;
 		}
-
-		this.consecutiveFailures = 0;
-		const title = await getWindowTitle();
-
-		const now = Date.now();
-		if (app !== this._currentApp) {
-			// アプリが変わった（初回 poll では _currentApp が null なのでここに入る）
-			this._currentStart = now;
-		}
-		this._currentApp = app;
-
-		this.setState("rec");
-		this.onPoll({ ts: now, app, title, idleSec });
 	}
 }
