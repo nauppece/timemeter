@@ -1,0 +1,22 @@
+{
+  "name": "obsidian-timemeter",
+  "version": "0.1.0",
+  "description": "最前面アプリを自動追跡して Markdown に記録するタイムトラッカー（Obsidian プラグイン）",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "vitest run",
+    "deploy": "npm run build && ./deploy.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "builtin-modules": "^5.3.0",
+    "esbuild": "^0.28.1",
+    "obsidian": "^1.13.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
