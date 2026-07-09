@@ -2,6 +2,7 @@ import { Notice, Platform, Plugin, type WorkspaceLeaf, moment } from "obsidian";
 import { aggregate, localDateStr } from "./src/aggregator";
 import { insertTimemeterBlock } from "./src/daily-embed";
 import { type EmbedHost, parseEmbedDate, renderEmbed } from "./src/embed";
+import { buildNippou, insertNippouCallout } from "./src/nippou";
 import { appendManual, defaultManualStart, setNote } from "./src/quicklog";
 import { QuickLogModal } from "./src/quicklog-modal";
 import { TimemeterSettingTab } from "./src/settings";
@@ -187,6 +188,22 @@ export default class TimeMeterPlugin extends Plugin {
 			name: "タイムメーター: 今すぐ集計",
 			callback: () => {
 				void this.aggregateNow();
+			},
+		});
+
+		this.addCommand({
+			id: "timemeter-insert-nippou-draft",
+			name: "タイムメーター: 日報の下書きをデイリーに挿入",
+			callback: () => {
+				void this.insertNippouDraft();
+			},
+		});
+
+		this.addCommand({
+			id: "timemeter-copy-claude-prompt",
+			name: "タイムメーター: Claude 用プロンプトをコピー",
+			callback: () => {
+				void this.copyClaudePrompt();
 			},
 		});
 
@@ -438,13 +455,7 @@ export default class TimeMeterPlugin extends Plugin {
 	 * マーカー外の既存本文（やったこと欄など）は一切変更しない。
 	 */
 	async insertDailyEmbed(): Promise<void> {
-		// obsidian の型定義は `import * as Moment from "moment"` の再エクスポートのため、
-		// このプロジェクトの moduleResolution ("bundler") 設定下では呼び出し可能型として
-		// 解決されない（実行時は Obsidian 本体が注入する本物の moment 関数なので問題なく呼べる）。
-		// 呼び出し可能な型として明示的にキャストする。
-		const momentFn = moment as unknown as () => import("moment").Moment;
-		const fileName = momentFn().locale("en").format("YYYY-MM-DD (ddd)");
-		const path = `${DAILY_FOLDER}/${fileName}.md`;
+		const path = this.todayDailyPath();
 		const file = this.app.vault.getFileByPath(path);
 		if (!file) {
 			new Notice("今日のデイリーノートが見つかりません");
@@ -462,6 +473,69 @@ export default class TimeMeterPlugin extends Plugin {
 		});
 
 		new Notice(alreadyPresent ? "タイムメーターは既に挿入されています" : "タイムメーターを挿入しました");
+	}
+
+	/**
+	 * 今日のデイリーノートのパスを返す（`insertDailyEmbed` と同じ momentFn パターンを再利用）。
+	 * obsidian の型定義上 moment は呼び出し可能型として解決されないため明示的にキャストする
+	 * （実行時は Obsidian 本体が注入する本物の moment 関数なので問題なく呼べる）。
+	 */
+	private todayDailyPath(): string {
+		const momentFn = moment as unknown as () => import("moment").Moment;
+		const fileName = momentFn().locale("en").format("YYYY-MM-DD (ddd)");
+		return `${DAILY_FOLDER}/${fileName}.md`;
+	}
+
+	/**
+	 * 「日報の下書きをデイリーに挿入」コマンドの本体。
+	 * 当日 readDay → hidden 除外 → buildNippou で行配列を作り、今日のデイリーの
+	 * `## ✅ やったこと` セクション末尾に callout として追記する（insertNippouCallout）。
+	 * 行配列が空、デイリーが無い、既に callout がある場合はいずれも Notice のみで
+	 * 既存本文を変更しない（データファイル タイムメーター/*.md はこのコマンドでは一切書き換えない）。
+	 */
+	async insertNippouDraft(): Promise<void> {
+		const sessions = await readDay(this.app, this.settings.dataFolder, todayStr());
+		const visible = sessions.filter((s) => !this.isHidden(s.app));
+		const draftLines = buildNippou(visible);
+		if (draftLines.length === 0) {
+			new Notice("説明のあるセッションがありません");
+			return;
+		}
+
+		const path = this.todayDailyPath();
+		const file = this.app.vault.getFileByPath(path);
+		if (!file) {
+			new Notice("今日のデイリーノートが見つかりません");
+			return;
+		}
+
+		let alreadyPresent = false;
+		await this.app.vault.process(file, (content) => {
+			const next = insertNippouCallout(content, draftLines);
+			if (next === null) {
+				alreadyPresent = true;
+				return content;
+			}
+			return next;
+		});
+
+		new Notice(alreadyPresent ? "日報の下書きは既に挿入されています" : "日報の下書きを挿入しました");
+	}
+
+	/**
+	 * 「Claude 用プロンプトをコピー」コマンドの本体。
+	 * 説明が空のセッションを Claude に埋めさせるためのプロンプト文をクリップボードへコピーする。
+	 * データファイルは一切変更しない（コピーのみ）。
+	 */
+	async copyClaudePrompt(): Promise<void> {
+		const date = localDateStr(Date.now());
+		const prompt = `\`${this.settings.dataFolder}/${date}.md\` の説明が空のセッションについて、時間帯とアプリ・ウィンドウタイトルから内容を推測して説明列を埋めて。既にある説明は変更しないで。`;
+		try {
+			await navigator.clipboard.writeText(prompt);
+			new Notice("コピーしました");
+		} catch {
+			new Notice("コピーに失敗しました");
+		}
 	}
 
 	onunload() {
