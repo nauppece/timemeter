@@ -37,7 +37,7 @@ export default class TimeMeterPlugin extends Plugin {
 		};
 		this.registerView(VIEW_TYPE_TIMEMETER, (leaf) => new TimemeterView(leaf, host));
 
-		this.addRibbonIcon("clock", "タイムメーター", () => {
+		this.addRibbonIcon("hourglass", "タイムメーター", () => {
 			void this.activateView();
 		});
 

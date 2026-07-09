@@ -87,7 +87,7 @@ export class TimemeterView extends ItemView {
 	}
 
 	getIcon(): string {
-		return "clock";
+		return "hourglass";
 	}
 
 	async onOpen(): Promise<void> {
