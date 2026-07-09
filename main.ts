@@ -149,12 +149,13 @@ export default class TimeMeterPlugin extends Plugin {
 
 		const folder = this.settings.dataFolder;
 		const today = todayStr();
-		const sessions = await readDay(this.app, folder, today);
-		const target = [...sessions]
-			.filter((s) => !s.manual && s.app === app)
-			.sort((a, b) => toMin(a.start) - toMin(b.start))
-			.pop();
-		if (!target) {
+		// 現行セッションを app 一致で最新 start のものとして選ぶヘルパ。
+		const pickTarget = (list: Session[]) =>
+			[...list]
+				.filter((s) => !s.manual && s.app === app)
+				.sort((a, b) => toMin(a.start) - toMin(b.start))
+				.pop();
+		if (!pickTarget(await readDay(this.app, folder, today))) {
 			new Notice("現在のセッションが見つかりません");
 			return;
 		}
@@ -163,6 +164,14 @@ export default class TimeMeterPlugin extends Plugin {
 			const trimmed = text.trim();
 			if (!trimmed) return; // 空入力はキャンセル扱い（既存 note を空で消さない）
 			void (async () => {
+				// 書き込み直前に読み直す。モーダルを開いている間に背景集計が走ると
+				// 事前スナップショットの他行 end/title が巻き戻るため、最新を base にする。
+				const sessions = await readDay(this.app, folder, today);
+				const target = pickTarget(sessions);
+				if (!target) {
+					new Notice("現在のセッションが見つかりません");
+					return;
+				}
 				const updated = setNote(sessions, sessionKey(target), trimmed);
 				await writeDay(this.app, folder, today, updated);
 				new Notice("メモを記録しました");
@@ -174,15 +183,15 @@ export default class TimeMeterPlugin extends Plugin {
 	async addManualLog(): Promise<void> {
 		const folder = this.settings.dataFolder;
 		const today = todayStr();
-		const sessions = await readDay(this.app, folder, today);
-		const now = nowHmStr();
-		const start = defaultManualStart(sessions, now);
-		const end = now;
+		const start = defaultManualStart(await readDay(this.app, folder, today), nowHmStr());
 
 		new QuickLogModal(this.app, "手動ログ：何をしていましたか", "例）ランニング", (text) => {
 			const trimmed = text.trim();
 			if (!trimmed) return; // 空入力はキャンセル扱い
 			void (async () => {
+				// 書き込み直前に読み直して最新を base にする（背景集計との競合回避）。
+				const sessions = await readDay(this.app, folder, today);
+				const end = nowHmStr();
 				const updated = appendManual(sessions, today, start, end, trimmed);
 				await writeDay(this.app, folder, today, updated);
 				new Notice("手動ログを追加しました");
