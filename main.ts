@@ -2,6 +2,7 @@ import { Notice, Platform, Plugin, type WorkspaceLeaf } from "obsidian";
 import { aggregate, localDateStr } from "./src/aggregator";
 import { appendManual, defaultManualStart, setNote } from "./src/quicklog";
 import { QuickLogModal } from "./src/quicklog-modal";
+import { TimemeterSettingTab } from "./src/settings";
 import { readDay, writeDay } from "./src/store";
 import { Tracker, type TrackerState } from "./src/tracker";
 import { DEFAULT_SETTINGS, type Poll, sessionKey, type Session, type TimemeterSettings, toMin } from "./src/types";
@@ -29,6 +30,23 @@ export default class TimeMeterPlugin extends Plugin {
 	laps: number[] = [];
 	aggregating = false;
 
+	/**
+	 * poll 経路の共通ハンドラ（onload / restartTracker で共有し、ロジックの重複を避ける）。
+	 * 未知アプリは既定ルール（表示・タイトル取込あり）で自動登録し、captureTitle が
+	 * 無効なアプリはタイトルを vault に残さないよう poll の時点で落とす。
+	 * hidden はここでは使わない（poll は常にバッファする。表示側の反映は別タスク）。
+	 */
+	private handlePoll = (p: Poll) => {
+		let rule = this.settings.apps[p.app];
+		if (!rule) {
+			rule = { hidden: false, captureTitle: true };
+			this.settings.apps[p.app] = rule;
+			void this.saveSettings();
+		}
+		if (!rule.captureTitle) p.title = null;
+		this.polls.push(p);
+	};
+
 	async onload() {
 		await this.loadSettings();
 		// 前回セッション中に貯まった laps のうち、当日分以外は起動時に捨てる。
@@ -48,6 +66,8 @@ export default class TimeMeterPlugin extends Plugin {
 			aggregateNow: () => plugin.aggregateNow(),
 		};
 		this.registerView(VIEW_TYPE_TIMEMETER, (leaf) => new TimemeterView(leaf, host));
+
+		this.addSettingTab(new TimemeterSettingTab(this.app, this));
 
 		this.addRibbonIcon("hourglass", "タイムメーター", () => {
 			void this.activateView();
@@ -71,9 +91,7 @@ export default class TimeMeterPlugin extends Plugin {
 			this.tracker = new Tracker(
 				this.settings.pollIntervalSec,
 				this.settings.afkThresholdSec,
-				(p: Poll) => {
-					this.polls.push(p);
-				},
+				this.handlePoll,
 				(s: TrackerState) => {
 					this.trackerState = s;
 				},
@@ -130,6 +148,27 @@ export default class TimeMeterPlugin extends Plugin {
 				return true;
 			},
 		});
+	}
+
+	/**
+	 * ポーリング間隔・AFK しきい値など Tracker のコンストラクタ引数に関わる設定が
+	 * 変更されたときに呼ぶ。旧 Tracker を stop（内部で clearInterval）してから
+	 * 新しい Tracker を作り直すため、二重ポーリングにはならない。
+	 * onload で登録したインターバル自体は onunload まで registerInterval に残るが、
+	 * clearInterval 済みのハンドルなので実害はない。
+	 */
+	restartTracker(): void {
+		if (!Platform.isDesktopApp) return;
+		this.tracker?.stop();
+		this.tracker = new Tracker(
+			this.settings.pollIntervalSec,
+			this.settings.afkThresholdSec,
+			this.handlePoll,
+			(s: TrackerState) => {
+				this.trackerState = s;
+			},
+		);
+		this.tracker.start((id) => this.registerInterval(id));
 	}
 
 	/**
