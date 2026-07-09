@@ -1,8 +1,9 @@
-import { Platform, Plugin } from "obsidian";
+import { Platform, Plugin, type WorkspaceLeaf } from "obsidian";
 import { aggregate, localDateStr } from "./src/aggregator";
 import { writeDay } from "./src/store";
 import { Tracker, type TrackerState } from "./src/tracker";
 import { DEFAULT_SETTINGS, type Poll, type Session, type TimemeterSettings } from "./src/types";
+import { TimemeterView, VIEW_TYPE_TIMEMETER, type TimemeterHost } from "./src/view-sidebar";
 
 const AGGREGATE_INTERVAL_MS = 60 * 1000;
 
@@ -21,6 +22,38 @@ export default class TimeMeterPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+
+		// 右サイドバーのビューを登録し、リボンアイコン／コマンドから開けるようにする。
+		const plugin = this;
+		const host: TimemeterHost = {
+			app: this.app,
+			get dataFolder() {
+				return plugin.settings.dataFolder;
+			},
+			getState: () => plugin.trackerState,
+			getCurrentApp: () => plugin.tracker?.currentApp ?? null,
+			getCurrentStart: () => plugin.tracker?.currentStart ?? null,
+			aggregateNow: () => plugin.aggregateNow(),
+		};
+		this.registerView(VIEW_TYPE_TIMEMETER, (leaf) => new TimemeterView(leaf, host));
+
+		this.addRibbonIcon("clock", "タイムメーター", () => {
+			void this.activateView();
+		});
+
+		this.addCommand({
+			id: "timemeter-open-view",
+			name: "タイムメーター: パネルを開く",
+			callback: () => {
+				void this.activateView();
+			},
+		});
+
+		if (this.settings.showSidebarOnStart) {
+			this.app.workspace.onLayoutReady(() => {
+				void this.activateView();
+			});
+		}
 
 		if (Platform.isDesktopApp) {
 			this.tracker = new Tracker(
@@ -49,6 +82,17 @@ export default class TimeMeterPlugin extends Plugin {
 				void this.aggregateNow();
 			},
 		});
+	}
+
+	/** 右サイドバーにビューを出す（既にあれば再表示するだけ）。 */
+	async activateView(): Promise<void> {
+		const { workspace } = this.app;
+		let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType(VIEW_TYPE_TIMEMETER)[0] ?? null;
+		if (!leaf) {
+			leaf = workspace.getRightLeaf(false);
+			await leaf?.setViewState({ type: VIEW_TYPE_TIMEMETER, active: true });
+		}
+		if (leaf) workspace.revealLeaf(leaf);
 	}
 
 	onunload() {
