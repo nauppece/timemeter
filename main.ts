@@ -1,8 +1,10 @@
-import { Platform, Plugin, type WorkspaceLeaf } from "obsidian";
+import { Notice, Platform, Plugin, type WorkspaceLeaf } from "obsidian";
 import { aggregate, localDateStr } from "./src/aggregator";
-import { writeDay } from "./src/store";
+import { appendManual, defaultManualStart, setNote } from "./src/quicklog";
+import { QuickLogModal } from "./src/quicklog-modal";
+import { readDay, writeDay } from "./src/store";
 import { Tracker, type TrackerState } from "./src/tracker";
-import { DEFAULT_SETTINGS, type Poll, type Session, type TimemeterSettings } from "./src/types";
+import { DEFAULT_SETTINGS, type Poll, sessionKey, type Session, type TimemeterSettings, toMin } from "./src/types";
 import { TimemeterView, VIEW_TYPE_TIMEMETER, type TimemeterHost } from "./src/view-sidebar";
 
 const AGGREGATE_INTERVAL_MS = 60 * 1000;
@@ -10,6 +12,13 @@ const AGGREGATE_INTERVAL_MS = 60 * 1000;
 /** 今日のローカル日付を "YYYY-MM-DD" にする（aggregator の localDateStr と同じ定義を再利用） */
 function todayStr(): string {
 	return localDateStr(Date.now());
+}
+
+/** 現在時刻のローカル "HH:MM" */
+function nowHmStr(): string {
+	const d = new Date();
+	const pad = (n: number) => String(n).padStart(2, "0");
+	return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export default class TimeMeterPlugin extends Plugin {
@@ -22,6 +31,9 @@ export default class TimeMeterPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		// 前回セッション中に貯まった laps のうち、当日分以外は起動時に捨てる。
+		const today0 = todayStr();
+		this.laps = this.laps.filter((l) => localDateStr(l) === today0);
 
 		// 右サイドバーのビューを登録し、リボンアイコン／コマンドから開けるようにする。
 		const plugin = this;
@@ -82,6 +94,108 @@ export default class TimeMeterPlugin extends Plugin {
 				void this.aggregateNow();
 			},
 		});
+
+		// クイックログ（タップ記録）: 3コマンド。
+		this.addCommand({
+			id: "timemeter-note-current",
+			name: "タイムメーター: 今のセッションにメモ",
+			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "T" }],
+			// デスクトップかつ現在追跡中のアプリがある時だけコマンドパレット/ホットキーに出す。
+			checkCallback: (checking: boolean) => {
+				if (!Platform.isDesktopApp || !this.tracker?.currentApp) return false;
+				if (!checking) {
+					void this.noteCurrentSession();
+				}
+				return true;
+			},
+		});
+
+		this.addCommand({
+			id: "timemeter-manual-log",
+			name: "タイムメーター: 手動ログを追加",
+			// モバイルでも動く（デスクトップ限定ガードを付けない）。
+			callback: () => {
+				void this.addManualLog();
+			},
+		});
+
+		this.addCommand({
+			id: "timemeter-lap",
+			name: "タイムメーター: ラップ（ここから別作業）",
+			checkCallback: (checking: boolean) => {
+				if (!Platform.isDesktopApp) return false;
+				if (!checking) {
+					void this.recordLap();
+				}
+				return true;
+			},
+		});
+	}
+
+	/**
+	 * 「今のセッションにメモ」コマンドの本体。
+	 * 現行セッションを堅牢に特定するため、tracker.currentStart からキーを機械生成しない。
+	 * セッションの start は「グループ先頭 poll の HH:MM」で、AFK ギャップにより同一アプリでも
+	 * start が currentStart と一致しない場合があるため、当日セッションのうち
+	 * 「非手動・app一致」の中で start が最大（＝最新）のものを対象とする。
+	 */
+	async noteCurrentSession(): Promise<void> {
+		await this.aggregateNow(); // 現行セッション行を当日ファイルに実体化
+		const app = this.tracker?.currentApp;
+		if (!app) {
+			new Notice("記録中のアプリがありません");
+			return;
+		}
+
+		const folder = this.settings.dataFolder;
+		const today = todayStr();
+		const sessions = await readDay(this.app, folder, today);
+		const target = [...sessions]
+			.filter((s) => !s.manual && s.app === app)
+			.sort((a, b) => toMin(a.start) - toMin(b.start))
+			.pop();
+		if (!target) {
+			new Notice("現在のセッションが見つかりません");
+			return;
+		}
+
+		new QuickLogModal(this.app, `「${app}」に一言メモ`, "何をしていますか", (text) => {
+			const trimmed = text.trim();
+			if (!trimmed) return; // 空入力はキャンセル扱い（既存 note を空で消さない）
+			void (async () => {
+				const updated = setNote(sessions, sessionKey(target), trimmed);
+				await writeDay(this.app, folder, today, updated);
+				new Notice("メモを記録しました");
+			})();
+		}).open();
+	}
+
+	/** 「手動ログを追加」コマンドの本体。モバイルでも呼べる。 */
+	async addManualLog(): Promise<void> {
+		const folder = this.settings.dataFolder;
+		const today = todayStr();
+		const sessions = await readDay(this.app, folder, today);
+		const now = nowHmStr();
+		const start = defaultManualStart(sessions, now);
+		const end = now;
+
+		new QuickLogModal(this.app, "手動ログ：何をしていましたか", "例）ランニング", (text) => {
+			const trimmed = text.trim();
+			if (!trimmed) return; // 空入力はキャンセル扱い
+			void (async () => {
+				const updated = appendManual(sessions, today, start, end, trimmed);
+				await writeDay(this.app, folder, today, updated);
+				new Notice("手動ログを追加しました");
+			})();
+		}).open();
+	}
+
+	/** 「ラップ（ここから別作業）」コマンドの本体。 */
+	async recordLap(): Promise<void> {
+		this.laps.push(Date.now());
+		await this.persistLaps();
+		await this.aggregateNow();
+		new Notice("ラップしました");
 	}
 
 	/** 右サイドバーにビューを出す（既にあれば再表示するだけ）。 */
@@ -140,12 +254,27 @@ export default class TimeMeterPlugin extends Plugin {
 		}
 	}
 
+	/**
+	 * 保存形は `{ settings, laps }`。laps 導入前の旧形式（settings がフラットに
+	 * 保存されたデータ）も読めるように後方互換を持たせる。
+	 */
 	async loadSettings() {
 		const data = await this.loadData();
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+		if (data && (data.settings || data.laps)) {
+			this.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
+			this.laps = data.laps ?? [];
+		} else {
+			this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+			this.laps = [];
+		}
 	}
 
 	async saveSettings() {
-		await this.saveData(this.settings);
+		await this.saveData({ settings: this.settings, laps: this.laps });
+	}
+
+	/** laps だけ変わったときの保存。保存形は saveSettings と共通。 */
+	async persistLaps() {
+		await this.saveSettings();
 	}
 }
