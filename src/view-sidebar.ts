@@ -1,6 +1,5 @@
-// 右サイドバーのビュー（レイアウトA・「今日」タブ本実装）。
+// 右サイドバーのビュー（レイアウトA・「今日」「日別」「月」タブ本実装）。
 // UIモック（タイムメーター - UIモック.html の .ob .sb-* 一式）の見た目・挙動を踏襲する。
-// 日別/月タブは Task 8b で中身を実装するため、この版では空のプレースホルダのみ用意する。
 
 import { type App, ItemView, Notice, type WorkspaceLeaf } from "obsidian";
 import { localDateStr } from "./aggregator";
@@ -63,8 +62,43 @@ export function appColor(name: string): string {
 	return PALETTE[h % PALETTE.length];
 }
 
+const WEEKDAY_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DOW_JA = ["月", "火", "水", "木", "金", "土", "日"];
+
+function pad2(n: number): string {
+	return String(n).padStart(2, "0");
+}
+
+/** "YYYY-MM-DD" を UTC 解釈させず、常にローカル日付として Date にする（TZ ズレ回避）。 */
+function parseLocalDate(dateStr: string): Date {
+	const [y, m, d] = dateStr.split("-").map(Number);
+	return new Date(y, m - 1, d);
+}
+
+/** dateStr の delta 日後（負なら前）を "YYYY-MM-DD" で返す。 */
+function addDays(dateStr: string, delta: number): string {
+	const d = parseLocalDate(dateStr);
+	d.setDate(d.getDate() + delta);
+	return localDateStr(d.getTime());
+}
+
+/** "YYYY-MM-DD (Wed)" 形式のラベル */
+function dayLabel(dateStr: string): string {
+	const d = parseLocalDate(dateStr);
+	return `${dateStr} (${WEEKDAY_EN[d.getDay()]})`;
+}
+
 type SubtabName = "bars" | "lanes";
 type TabName = "today" | "day" | "month";
+
+/** renderLanes に渡す表示コンテキスト（日別/今日で異なる date・ライブ強調・保存後コールバックを渡す）。 */
+interface LanesOpts {
+	date: string;
+	liveKey: string | null;
+	allowFillIn: boolean;
+	onSaved: () => Promise<void>;
+	emptyMessage?: string;
+}
 
 export class TimemeterView extends ItemView {
 	private host: TimemeterHost;
@@ -100,6 +134,25 @@ export class TimemeterView extends ItemView {
 	private viewDayEl: HTMLElement | null = null;
 	private viewMonthEl: HTMLElement | null = null;
 	private activeTab: TabName = "today";
+
+	// ── 日別 view
+	private dayPrevBtn: HTMLButtonElement | null = null;
+	private dayNextBtn: HTMLButtonElement | null = null;
+	private dayLabelEl: HTMLElement | null = null;
+	private dayTotalValEl: HTMLElement | null = null;
+	private daySubtabBarsBtn: HTMLButtonElement | null = null;
+	private daySubtabLanesBtn: HTMLButtonElement | null = null;
+	private dayBarsEl: HTMLElement | null = null;
+	private dayLanesEl: HTMLElement | null = null;
+	private dayActiveSubtab: SubtabName = "bars";
+	private dayViewDate: string = localDateStr(Date.now() - 24 * 60 * 60 * 1000);
+
+	// ── 月 view
+	private monthTitleEl: HTMLElement | null = null;
+	private monthGridEl: HTMLElement | null = null;
+	private monthLg1El: HTMLElement | null = null;
+	private monthLg2El: HTMLElement | null = null;
+	private monthLg3El: HTMLElement | null = null;
 
 	// ── コンテキストメニュー・ツールチップ
 	private ctxmenuEl: HTMLElement | null = null;
@@ -180,17 +233,11 @@ export class TimemeterView extends ItemView {
 		this.viewTodayEl = body.createDiv({ cls: "view on" });
 		this.buildTodayView(this.viewTodayEl);
 
-		// ── view-day / view-month（8b でプレースホルダを置き換える）
+		// ── view-day / view-month
 		this.viewDayEl = body.createDiv({ cls: "view" });
-		this.viewDayEl.createDiv({
-			cls: "view-placeholder",
-			text: "日別タブは次のアップデートで実装予定です。",
-		});
+		this.buildDayView(this.viewDayEl);
 		this.viewMonthEl = body.createDiv({ cls: "view" });
-		this.viewMonthEl.createDiv({
-			cls: "view-placeholder",
-			text: "月タブは次のアップデートで実装予定です。",
-		});
+		this.buildMonthView(this.viewMonthEl);
 
 		// ── sb-tabs
 		const tabs = root.createDiv({ cls: "sb-tabs" });
@@ -210,12 +257,12 @@ export class TimemeterView extends ItemView {
 		this.ctxHideBtn.addEventListener("click", () => {
 			if (this.ctxApp) this.host.toggleHidden(this.ctxApp);
 			this.ctxmenuEl?.removeClass("open");
-			void this.refresh();
+			this.refreshActive();
 		});
 		this.ctxCaptureBtn.addEventListener("click", () => {
 			if (this.ctxApp) this.host.toggleCaptureTitle(this.ctxApp);
 			this.ctxmenuEl?.removeClass("open");
-			void this.refresh();
+			this.refreshActive();
 		});
 		this.ctxSettingsBtn.addEventListener("click", () => {
 			this.ctxmenuEl?.removeClass("open");
@@ -280,6 +327,45 @@ export class TimemeterView extends ItemView {
 		});
 	}
 
+	/** 「日別」タブの中身（◀/▶ ナビ・合計・合計/時系列サブタブ）を組み立てる。 */
+	private buildDayView(container: HTMLElement): void {
+		const nav = container.createDiv({ cls: "daynav" });
+		this.dayPrevBtn = nav.createEl("button", { cls: "navbtn", text: "◀" });
+		this.dayLabelEl = nav.createEl("b");
+		this.dayNextBtn = nav.createEl("button", { cls: "navbtn", text: "▶" });
+		this.dayPrevBtn.addEventListener("click", () => this.shiftDay(-1));
+		this.dayNextBtn.addEventListener("click", () => this.shiftDay(1));
+
+		const totalRow = container.createDiv({ cls: "day-total" });
+		totalRow.appendText("合計 ");
+		this.dayTotalValEl = totalRow.createEl("b", { text: "0m" });
+
+		container.createEl("hr", { cls: "rule" });
+
+		const subtabs = container.createDiv({ cls: "subtabs" });
+		this.daySubtabBarsBtn = subtabs.createEl("button", { cls: "on", text: "合計" });
+		this.daySubtabLanesBtn = subtabs.createEl("button", { text: "時系列" });
+		this.daySubtabBarsBtn.addEventListener("click", () => this.selectDaySubtab("bars"));
+		this.daySubtabLanesBtn.addEventListener("click", () => this.selectDaySubtab("lanes"));
+
+		this.dayBarsEl = container.createDiv({ cls: "bars subview on" });
+		this.dayLanesEl = container.createDiv({ cls: "lanes subview" });
+	}
+
+	/** 「月」タブの中身（ヒートマップ・凡例）を組み立てる。 */
+	private buildMonthView(container: HTMLElement): void {
+		const month = container.createDiv({ cls: "month" });
+		this.monthTitleEl = month.createDiv({ cls: "m-title" });
+		this.monthGridEl = month.createDiv({ cls: "m-grid" });
+		const legend = month.createDiv({ cls: "m-legend" });
+		legend.appendText("少 ");
+		legend.createEl("i", { attr: { style: "background:var(--background-modifier-border)" } });
+		this.monthLg1El = legend.createEl("i");
+		this.monthLg2El = legend.createEl("i");
+		this.monthLg3El = legend.createEl("i");
+		legend.appendText(" 多（日クリックで日別へ）");
+	}
+
 	private selectSubtab(which: SubtabName): void {
 		this.activeSubtab = which;
 		this.subtabBarsBtn?.toggleClass("on", which === "bars");
@@ -288,6 +374,15 @@ export class TimemeterView extends ItemView {
 		this.lanesEl?.toggleClass("on", which === "lanes");
 	}
 
+	private selectDaySubtab(which: SubtabName): void {
+		this.dayActiveSubtab = which;
+		this.daySubtabBarsBtn?.toggleClass("on", which === "bars");
+		this.daySubtabLanesBtn?.toggleClass("on", which === "lanes");
+		this.dayBarsEl?.toggleClass("on", which === "bars");
+		this.dayLanesEl?.toggleClass("on", which === "lanes");
+	}
+
+	/** タブ切替。日別/月は開いた時に初めてデータを読み込む（今日タブの20秒ポーリングでは読まない）。 */
 	private selectTab(name: TabName): void {
 		this.activeTab = name;
 		this.todayTabBtn?.toggleClass("on", name === "today");
@@ -296,6 +391,15 @@ export class TimemeterView extends ItemView {
 		this.viewTodayEl?.toggleClass("on", name === "today");
 		this.viewDayEl?.toggleClass("on", name === "day");
 		this.viewMonthEl?.toggleClass("on", name === "month");
+		if (name === "day") void this.refreshDayView();
+		if (name === "month") void this.refreshMonth();
+	}
+
+	/** コンテキストメニュー操作（非表示/タイトル取込トグル）の後、現在アクティブなタブだけを再描画する。 */
+	private refreshActive(): void {
+		if (this.activeTab === "today") void this.refresh();
+		else if (this.activeTab === "day") void this.refreshDayView();
+		else if (this.activeTab === "month") void this.refreshMonth();
 	}
 
 	/** 1 秒ごと: 状態ピル・一時停止ボタン・errbar・経過分秒・AFK/一時停止サブ行を更新する（I/O なし）。 */
@@ -347,8 +451,13 @@ export class TimemeterView extends ItemView {
 		this.liveSessionKey = app ? this.pickLatestKey(sessions, app) : null;
 
 		this.updateTodayTotal(sessions);
-		this.renderBars(sessions);
-		this.renderLanes(sessions);
+		this.renderBars(this.barsEl, sessions);
+		this.renderLanes(this.lanesEl, sessions, {
+			date: this.currentDate,
+			liveKey: this.liveSessionKey,
+			allowFillIn: true,
+			onSaved: () => this.refresh(),
+		});
 		this.updateBadge(sessions);
 	}
 
@@ -367,6 +476,130 @@ export class TimemeterView extends ItemView {
 		this.todayTotalValEl?.setText(fmtDur(total));
 	}
 
+	/** ◀/▶: dayViewDate を ±1 日する。未来日（今日より後）へは進めない。 */
+	private shiftDay(delta: number): void {
+		const todayStr = localDateStr(Date.now());
+		let candidate = addDays(this.dayViewDate, delta);
+		if (candidate > todayStr) candidate = todayStr;
+		this.dayViewDate = candidate;
+		void this.refreshDayView();
+	}
+
+	/** 「日別」タブを開いた時／◀▶操作時に、その日のセッションを読み直して描画する。 */
+	private async refreshDayView(): Promise<void> {
+		const todayStr = localDateStr(Date.now());
+		if (this.dayViewDate === todayStr) {
+			// 今日を表示中なら、進行中のセッションを実体化してから読む（今日タブと同様に最新化）。
+			await this.host.aggregateNow();
+		}
+		const sessions = await readDay(this.host.app, this.host.dataFolder, this.dayViewDate);
+
+		if (this.dayLabelEl) this.dayLabelEl.setText(dayLabel(this.dayViewDate));
+		if (this.dayNextBtn) this.dayNextBtn.disabled = this.dayViewDate >= todayStr;
+
+		const total = sessions.reduce((sum, s) => sum + (this.host.isHidden(s.app) ? 0 : durMin(s)), 0);
+		this.dayTotalValEl?.setText(fmtDur(total));
+
+		const app = this.host.getCurrentApp();
+		const liveKey = this.dayViewDate === todayStr && app ? this.pickLatestKey(sessions, app) : null;
+
+		const emptyMessage = "この日の記録はありません";
+		this.renderBars(this.dayBarsEl, sessions, emptyMessage);
+		this.renderLanes(this.dayLanesEl, sessions, {
+			date: this.dayViewDate,
+			liveKey,
+			allowFillIn: true,
+			onSaved: () => this.refreshDayView(),
+			emptyMessage,
+		});
+	}
+
+	/** 「月」タブを開いた時、今月の各日を readDay で読んで合計分のヒートマップを組み立てる。 */
+	private async refreshMonth(): Promise<void> {
+		const now = new Date();
+		const year = now.getFullYear();
+		const month = now.getMonth() + 1; // 1-12
+		const todayStr = localDateStr(Date.now());
+		this.monthTitleEl?.setText(`${year}年${month}月`);
+
+		const daysInMonth = new Date(year, month, 0).getDate();
+		const dateStrs: string[] = [];
+		for (let d = 1; d <= daysInMonth; d++) {
+			dateStrs.push(`${year}-${pad2(month)}-${pad2(d)}`);
+		}
+
+		const sessionsPerDay = await Promise.all(
+			dateStrs.map((ds) =>
+				readDay(this.host.app, this.host.dataFolder, ds).catch(() => [] as Session[]),
+			),
+		);
+		const totals = sessionsPerDay.map((sess) =>
+			sess.reduce((sum, s) => sum + (this.host.isHidden(s.app) ? 0 : durMin(s)), 0),
+		);
+
+		let maxTotal = 0;
+		for (let i = 0; i < dateStrs.length; i++) {
+			if (dateStrs[i] <= todayStr && totals[i] > maxTotal) maxTotal = totals[i];
+		}
+
+		this.renderMonthGrid(year, month, dateStrs, totals, maxTotal, todayStr);
+
+		const heatColor = (pct: number): string =>
+			`color-mix(in srgb, var(--interactive-accent) ${pct}%, var(--background-modifier-border))`;
+		if (this.monthLg1El) this.monthLg1El.style.background = heatColor(30);
+		if (this.monthLg2El) this.monthLg2El.style.background = heatColor(55);
+		if (this.monthLg3El) this.monthLg3El.style.background = heatColor(80);
+	}
+
+	/** 月グリッドの中身（月曜始まりオフセット＋各日セル）を描く。 */
+	private renderMonthGrid(
+		year: number,
+		month: number,
+		dateStrs: string[],
+		totals: number[],
+		maxTotal: number,
+		todayStr: string,
+	): void {
+		const grid = this.monthGridEl;
+		if (!grid) return;
+		grid.empty();
+
+		for (const d of DOW_JA) grid.createDiv({ cls: "dow", text: d });
+
+		// 日曜=0 の getDay() を月曜始まりのオフセットに変換
+		const firstDow = new Date(year, month - 1, 1).getDay();
+		const offset = (firstDow + 6) % 7;
+		for (let i = 0; i < offset; i++) grid.createDiv({ cls: "m-cell empty" });
+
+		const levelPct = [30, 55, 80];
+		for (let d = 1; d <= dateStrs.length; d++) {
+			const ds = dateStrs[d - 1];
+			const cell = grid.createDiv({ cls: "m-cell" });
+			cell.setText(String(d));
+			if (ds === todayStr) cell.addClass("today");
+
+			if (ds > todayStr) {
+				cell.addClass("future");
+				continue;
+			}
+
+			const total = totals[d - 1];
+			let level = 0;
+			if (total > 0 && maxTotal > 0) {
+				const pct = total / maxTotal;
+				level = pct <= 1 / 3 ? 1 : pct <= 2 / 3 ? 2 : 3;
+			}
+			if (level > 0) {
+				cell.style.background = `color-mix(in srgb, var(--interactive-accent) ${levelPct[level - 1]}%, var(--background-modifier-border))`;
+			}
+			cell.setAttr("title", `${ds} — ${total > 0 ? fmtDur(total) : "記録なし"}`);
+			cell.addEventListener("click", () => {
+				this.dayViewDate = ds;
+				this.selectTab("day");
+			});
+		}
+	}
+
 	private updateBadge(sessions: Session[]): void {
 		if (!this.badgeEl) return;
 		const count = sessions.filter((s) => !s.manual && !this.host.isHidden(s.app) && s.note.trim() === "").length;
@@ -379,9 +612,9 @@ export class TimemeterView extends ItemView {
 		}
 	}
 
-	/** モックの renderBars 準拠: アプリ別合計バー。hidden 行は幅0・"—"・薄色、⋯/右クリックでコンテキストメニュー。 */
-	private renderBars(sessions: Session[]): void {
-		const bars = this.barsEl;
+	/** モックの renderBars 準拠: アプリ別合計バー。hidden 行は幅0・"—"・薄色、⋯/右クリックでコンテキストメニュー。
+	 *  今日/日別タブ共通で使う（container を呼び出し側から渡す）。 */
+	private renderBars(bars: HTMLElement | null, sessions: Session[], emptyMessage = "まだ記録がありません"): void {
 		if (!bars) return;
 		bars.empty();
 
@@ -391,7 +624,7 @@ export class TimemeterView extends ItemView {
 		}
 		const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
 		if (sorted.length === 0) {
-			bars.createDiv({ cls: "tm-empty", text: "まだ記録がありません" });
+			bars.createDiv({ cls: "tm-empty", text: emptyMessage });
 			return;
 		}
 
@@ -422,14 +655,14 @@ export class TimemeterView extends ItemView {
 		}
 	}
 
-	/** モックの renderLanes 準拠: アプリごとのレーンに時刻でセグメントを置く。 */
-	private renderLanes(sessions: Session[]): void {
-		const lanes = this.lanesEl;
+	/** モックの renderLanes 準拠: アプリごとのレーンに時刻でセグメントを置く。
+	 *  今日/日別タブ共通で使う（container・date・ライブ強調キー・穴埋め可否を opts で渡す）。 */
+	private renderLanes(lanes: HTMLElement | null, sessions: Session[], opts: LanesOpts): void {
 		if (!lanes) return;
 		lanes.empty();
 
 		if (sessions.length === 0) {
-			lanes.createDiv({ cls: "tm-empty", text: "まだ記録がありません" });
+			lanes.createDiv({ cls: "tm-empty", text: opts.emptyMessage ?? "まだ記録がありません" });
 			return;
 		}
 
@@ -468,7 +701,7 @@ export class TimemeterView extends ItemView {
 			}
 			for (const s of visible) {
 				if (s.app !== app) continue;
-				const isLive = sessionKey(s) === this.liveSessionKey;
+				const isLive = sessionKey(s) === opts.liveKey;
 				const hasNote = s.note.trim().length > 0;
 				const startMin = toMin(s.start);
 				const endMin = toMin(s.end);
@@ -480,13 +713,13 @@ export class TimemeterView extends ItemView {
 				seg.style.width = `${Math.max(0.6, ((endMin - startMin) / span) * 100)}%`;
 				seg.style.background = appColor(app);
 				this.attachTip(seg, s, isLive);
-				// 穴埋め: note が空の非手動セグメントはクリックで簡易入力を開く。
-				if (!s.manual && !hasNote) {
+				// 穴埋め: note が空の非手動セグメントはクリックで簡易入力を開く（許可されている場合のみ）。
+				if (opts.allowFillIn && !s.manual && !hasNote) {
 					seg.addClass("fillable");
 					seg.setAttr("title", "クリックで説明を追記");
 					seg.addEventListener("click", (ev) => {
 						ev.stopPropagation();
-						this.openFillIn(s);
+						this.openFillIn(s, opts.date, opts.onSaved);
 					});
 				}
 			}
@@ -536,15 +769,15 @@ export class TimemeterView extends ItemView {
 		ctx.style.top = `${y}px`;
 	}
 
-	/** note が空のセグメントをクリックしたときの簡易入力（QuickLogModal 流用）。 */
-	private openFillIn(session: Session): void {
+	/** note が空のセグメントをクリックしたときの簡易入力（QuickLogModal 流用）。今日/日別タブ共通。 */
+	private openFillIn(session: Session, date: string, onSaved: () => Promise<void>): void {
 		const label = `${session.app} ${session.start}–${session.end}`;
 		new QuickLogModal(this.host.app, `${label} の説明を追記`, "何をしていましたか", (text) => {
 			const trimmed = text.trim();
 			if (!trimmed) return; // 空入力はキャンセル扱い（既存 note を空で消さない）
 			void (async () => {
-				await this.host.setSegmentNote(this.currentDate, sessionKey(session), trimmed);
-				await this.refresh();
+				await this.host.setSegmentNote(date, sessionKey(session), trimmed);
+				await onSaved();
 				new Notice("メモを記録しました");
 			})();
 		}).open();
