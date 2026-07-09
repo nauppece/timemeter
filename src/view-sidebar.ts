@@ -3,6 +3,7 @@
 
 import { type App, ItemView, Notice, type WorkspaceLeaf } from "obsidian";
 import { localDateStr } from "./aggregator";
+import { appColor } from "./appcolor";
 import { QuickLogModal } from "./quicklog-modal";
 import { readDay } from "./store";
 import type { TrackerState } from "./tracker";
@@ -37,30 +38,6 @@ const STATE_LABEL: Record<TrackerState, string> = {
 	pause: "一時停止",
 	err: "権限エラー",
 };
-
-// アプリ名の文字列ハッシュから安定して色を選ぶための 12 色パレット。
-const PALETTE = [
-	"#e06c75",
-	"#61afef",
-	"#98c379",
-	"#e5c07b",
-	"#c678dd",
-	"#56b6c2",
-	"#d19a66",
-	"#e39ac6",
-	"#5c9e6b",
-	"#c0a9e0",
-	"#519ab5",
-	"#b58900",
-];
-
-export function appColor(name: string): string {
-	let h = 0;
-	for (let i = 0; i < name.length; i++) {
-		h = (h * 31 + name.charCodeAt(i)) >>> 0;
-	}
-	return PALETTE[h % PALETTE.length];
-}
 
 const WEEKDAY_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DOW_JA = ["月", "火", "水", "木", "金", "土", "日"];

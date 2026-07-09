@@ -1,13 +1,17 @@
-import { Notice, Platform, Plugin, type WorkspaceLeaf } from "obsidian";
+import { Notice, Platform, Plugin, type WorkspaceLeaf, moment } from "obsidian";
 import { aggregate, localDateStr } from "./src/aggregator";
+import { insertTimemeterBlock } from "./src/daily-embed";
+import { type EmbedHost, parseEmbedDate, renderEmbed } from "./src/embed";
 import { appendManual, defaultManualStart, setNote } from "./src/quicklog";
 import { QuickLogModal } from "./src/quicklog-modal";
 import { TimemeterSettingTab } from "./src/settings";
+import { renderStatusBarText } from "./src/statusbar";
 import { readDay, writeDay } from "./src/store";
 import { Tracker, type TrackerState } from "./src/tracker";
 import {
 	type AppRule,
 	DEFAULT_SETTINGS,
+	durMin,
 	type Poll,
 	sessionKey,
 	type Session,
@@ -15,6 +19,10 @@ import {
 	toMin,
 } from "./src/types";
 import { TimemeterView, VIEW_TYPE_TIMEMETER, type TimemeterHost } from "./src/view-sidebar";
+
+const DAILY_FOLDER = "デイリー";
+const STATUS_BAR_LIVE_INTERVAL_MS = 1000;
+const STATUS_BAR_TOTAL_INTERVAL_MS = 10 * 1000;
 
 const AGGREGATE_INTERVAL_MS = 60 * 1000;
 
@@ -49,6 +57,8 @@ export default class TimeMeterPlugin extends Plugin {
 	polls: Poll[] = [];
 	laps: number[] = [];
 	aggregating = false;
+	statusBarEl: HTMLElement | null = null;
+	private todayTotalMin = 0;
 
 	/**
 	 * poll 経路の共通ハンドラ（onload / restartTracker で共有し、ロジックの重複を避ける）。
@@ -131,7 +141,46 @@ export default class TimeMeterPlugin extends Plugin {
 					void this.aggregateNow();
 				}, AGGREGATE_INTERVAL_MS),
 			);
+
+			// ステータスバー（デスクトップのみ）。表示可否は settings.showStatusBar に追随する
+			// （非表示設定でも要素自体は残し display だけ切り替える。refreshStatusBar 参照）。
+			this.statusBarEl = this.addStatusBarItem();
+			this.statusBarEl.addClass("tm-statusbar");
+			this.statusBarEl.setAttr("aria-label", "タイムメーター: クリックでパネルを開く");
+			this.statusBarEl.addEventListener("click", () => {
+				void this.activateView();
+			});
+			this.refreshStatusBar();
+			this.updateStatusBarLive();
+			void this.updateStatusBarTotal();
+			this.registerInterval(
+				window.setInterval(() => this.updateStatusBarLive(), STATUS_BAR_LIVE_INTERVAL_MS),
+			);
+			this.registerInterval(
+				window.setInterval(() => void this.updateStatusBarTotal(), STATUS_BAR_TOTAL_INTERVAL_MS),
+			);
 		}
+
+		// `timemeter` コードブロック（デイリー等への埋め込み）。読み取り専用・モバイルでも動く。
+		const embedHost: EmbedHost = {
+			app: this.app,
+			get dataFolder() {
+				return plugin.settings.dataFolder;
+			},
+			isHidden: (app) => plugin.isHidden(app),
+		};
+		this.registerMarkdownCodeBlockProcessor("timemeter", (source, el) => {
+			const dateStr = parseEmbedDate(source, todayStr());
+			return renderEmbed(el, embedHost, dateStr);
+		});
+
+		this.addCommand({
+			id: "timemeter-insert-daily-embed",
+			name: "タイムメーター: デイリーに今日のタイムメーターを挿入",
+			callback: () => {
+				void this.insertDailyEmbed();
+			},
+		});
 
 		this.addCommand({
 			id: "timemeter-aggregate-now",
@@ -349,6 +398,70 @@ export default class TimeMeterPlugin extends Plugin {
 			await leaf?.setViewState({ type: VIEW_TYPE_TIMEMETER, active: true });
 		}
 		if (leaf) workspace.revealLeaf(leaf);
+	}
+
+	/**
+	 * settings.showStatusBar に合わせてステータスバー要素の表示/非表示を切り替える。
+	 * 要素自体は onload 時（デスクトップのみ）に一度だけ作り、以降は display の切替のみ行う
+	 * （設定タブのトグルからも呼べる）。モバイルでは statusBarEl が無いので何もしない。
+	 */
+	refreshStatusBar(): void {
+		if (!this.statusBarEl) return;
+		this.statusBarEl.style.display = this.settings.showStatusBar ? "" : "none";
+	}
+
+	/** 1秒ごと: 現在アプリ・経過分・状態だけを反映する（I/O なし・todayTotalMin はキャッシュ値を使う）。 */
+	private updateStatusBarLive(): void {
+		if (!this.statusBarEl) return;
+		const plugin = this;
+		this.statusBarEl.setText(
+			renderStatusBarText({
+				getState: () => plugin.trackerState,
+				getCurrentApp: () => plugin.tracker?.currentApp ?? null,
+				getCurrentStart: () => plugin.tracker?.currentStart ?? null,
+				getTodayTotalMin: () => plugin.todayTotalMin,
+			}),
+		);
+	}
+
+	/** 約10秒ごと: 今日合計（hidden 除外）を readDay で読み直してキャッシュし、表示へ反映する。 */
+	private async updateStatusBarTotal(): Promise<void> {
+		const sessions = await readDay(this.app, this.settings.dataFolder, todayStr());
+		this.todayTotalMin = sessions.reduce((sum, s) => sum + (this.isHidden(s.app) ? 0 : durMin(s)), 0);
+		this.updateStatusBarLive();
+	}
+
+	/**
+	 * 「デイリーに今日のタイムメーターを挿入」コマンドの本体。
+	 * 対象は `デイリー/{今日, 英語曜日}.md`。既に timemeter ブロックがあれば何もしない
+	 * （insertTimemeterBlock が null を返す）。app.vault.process で読み書きし、
+	 * マーカー外の既存本文（やったこと欄など）は一切変更しない。
+	 */
+	async insertDailyEmbed(): Promise<void> {
+		// obsidian の型定義は `import * as Moment from "moment"` の再エクスポートのため、
+		// このプロジェクトの moduleResolution ("bundler") 設定下では呼び出し可能型として
+		// 解決されない（実行時は Obsidian 本体が注入する本物の moment 関数なので問題なく呼べる）。
+		// 呼び出し可能な型として明示的にキャストする。
+		const momentFn = moment as unknown as () => import("moment").Moment;
+		const fileName = momentFn().locale("en").format("YYYY-MM-DD (ddd)");
+		const path = `${DAILY_FOLDER}/${fileName}.md`;
+		const file = this.app.vault.getFileByPath(path);
+		if (!file) {
+			new Notice("今日のデイリーノートが見つかりません");
+			return;
+		}
+
+		let alreadyPresent = false;
+		await this.app.vault.process(file, (content) => {
+			const next = insertTimemeterBlock(content);
+			if (next === null) {
+				alreadyPresent = true;
+				return content;
+			}
+			return next;
+		});
+
+		new Notice(alreadyPresent ? "タイムメーターは既に挿入されています" : "タイムメーターを挿入しました");
 	}
 
 	onunload() {

@@ -81,6 +81,7 @@ export class TimemeterSettingTab extends PluginSettingTab {
 				toggle.setValue(plugin.settings.showStatusBar).onChange(async (value) => {
 					plugin.settings.showStatusBar = value;
 					await plugin.saveSettings();
+					plugin.refreshStatusBar();
 				}),
 			);
 
