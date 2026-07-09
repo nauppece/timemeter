@@ -5,7 +5,15 @@ import { QuickLogModal } from "./src/quicklog-modal";
 import { TimemeterSettingTab } from "./src/settings";
 import { readDay, writeDay } from "./src/store";
 import { Tracker, type TrackerState } from "./src/tracker";
-import { DEFAULT_SETTINGS, type Poll, sessionKey, type Session, type TimemeterSettings, toMin } from "./src/types";
+import {
+	type AppRule,
+	DEFAULT_SETTINGS,
+	type Poll,
+	sessionKey,
+	type Session,
+	type TimemeterSettings,
+	toMin,
+} from "./src/types";
 import { TimemeterView, VIEW_TYPE_TIMEMETER, type TimemeterHost } from "./src/view-sidebar";
 
 const AGGREGATE_INTERVAL_MS = 60 * 1000;
@@ -20,6 +28,18 @@ function nowHmStr(): string {
 	const d = new Date();
 	const pad = (n: number) => String(n).padStart(2, "0");
 	return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * 当日セッションのうち「非手動・app一致」の中で start が最大（＝最新）のものを
+ * 現行セッションとして選ぶ。noteCurrentSession（事前チェック）と setCurrentNote（書き込み）
+ * の両方で使う共通ヘルパー（DRY化）。
+ */
+function pickCurrentTarget(list: Session[], app: string): Session | undefined {
+	return [...list]
+		.filter((s) => !s.manual && s.app === app)
+		.sort((a, b) => toMin(a.start) - toMin(b.start))
+		.pop();
 }
 
 export default class TimeMeterPlugin extends Plugin {
@@ -64,6 +84,14 @@ export default class TimeMeterPlugin extends Plugin {
 			getCurrentApp: () => plugin.tracker?.currentApp ?? null,
 			getCurrentStart: () => plugin.tracker?.currentStart ?? null,
 			aggregateNow: () => plugin.aggregateNow(),
+			togglePause: () => plugin.togglePause(),
+			openSettings: () => plugin.openSettings(),
+			setCurrentNote: (text) => plugin.setCurrentNote(text),
+			setSegmentNote: (date, key, text) => plugin.setSegmentNote(date, key, text),
+			isHidden: (app) => plugin.isHidden(app),
+			toggleHidden: (app) => plugin.toggleHidden(app),
+			getCaptureTitle: (app) => plugin.getCaptureTitle(app),
+			toggleCaptureTitle: (app) => plugin.toggleCaptureTitle(app),
 		};
 		this.registerView(VIEW_TYPE_TIMEMETER, (leaf) => new TimemeterView(leaf, host));
 
@@ -173,10 +201,10 @@ export default class TimeMeterPlugin extends Plugin {
 
 	/**
 	 * 「今のセッションにメモ」コマンドの本体。
-	 * 現行セッションを堅牢に特定するため、tracker.currentStart からキーを機械生成しない。
-	 * セッションの start は「グループ先頭 poll の HH:MM」で、AFK ギャップにより同一アプリでも
-	 * start が currentStart と一致しない場合があるため、当日セッションのうち
-	 * 「非手動・app一致」の中で start が最大（＝最新）のものを対象とする。
+	 * 現行セッションを堅牢に特定するため、tracker.currentStart からキーを機械生成しない
+	 * （pickCurrentTarget が「非手動・app一致・start 最大」で選ぶ）。
+	 * 実際の書き込みは setCurrentNote に委譲する（サイドバーのクイック入力と共通処理・DRY化）。
+	 * ここではモーダルを開く前に「対象があるか」だけ先に確認し、無ければモーダルを開かない。
 	 */
 	async noteCurrentSession(): Promise<void> {
 		await this.aggregateNow(); // 現行セッション行を当日ファイルに実体化
@@ -188,13 +216,7 @@ export default class TimeMeterPlugin extends Plugin {
 
 		const folder = this.settings.dataFolder;
 		const today = todayStr();
-		// 現行セッションを app 一致で最新 start のものとして選ぶヘルパ。
-		const pickTarget = (list: Session[]) =>
-			[...list]
-				.filter((s) => !s.manual && s.app === app)
-				.sort((a, b) => toMin(a.start) - toMin(b.start))
-				.pop();
-		if (!pickTarget(await readDay(this.app, folder, today))) {
+		if (!pickCurrentTarget(await readDay(this.app, folder, today), app)) {
 			new Notice("現在のセッションが見つかりません");
 			return;
 		}
@@ -203,19 +225,91 @@ export default class TimeMeterPlugin extends Plugin {
 			const trimmed = text.trim();
 			if (!trimmed) return; // 空入力はキャンセル扱い（既存 note を空で消さない）
 			void (async () => {
-				// 書き込み直前に読み直す。モーダルを開いている間に背景集計が走ると
-				// 事前スナップショットの他行 end/title が巻き戻るため、最新を base にする。
-				const sessions = await readDay(this.app, folder, today);
-				const target = pickTarget(sessions);
-				if (!target) {
-					new Notice("現在のセッションが見つかりません");
-					return;
-				}
-				const updated = setNote(sessions, sessionKey(target), trimmed);
-				await writeDay(this.app, folder, today, updated);
+				await this.setCurrentNote(trimmed);
 				new Notice("メモを記録しました");
 			})();
 		}).open();
+	}
+
+	/**
+	 * 現行セッションに note を書き込む共通処理（TimemeterHost.setCurrentNote の実体）。
+	 * text が空、または対象セッションが見つからない場合は何もしない。
+	 * 処理: aggregateNow → readDay(today) → pickCurrentTarget → setNote → writeDay。
+	 * 書き込み直前に readDay し直すのは、背景集計（60秒インターバル）との競合を避けるため
+	 * （事前スナップショットの他行 end/title が巻き戻るのを防ぐ）。
+	 */
+	async setCurrentNote(text: string): Promise<void> {
+		const trimmed = text.trim();
+		if (!trimmed) return;
+		await this.aggregateNow();
+		const app = this.tracker?.currentApp;
+		if (!app) return;
+		const folder = this.settings.dataFolder;
+		const today = todayStr();
+		const sessions = await readDay(this.app, folder, today);
+		const target = pickCurrentTarget(sessions, app);
+		if (!target) return;
+		const updated = setNote(sessions, sessionKey(target), trimmed);
+		await writeDay(this.app, folder, today, updated);
+	}
+
+	/**
+	 * 指定セッション（date/key）に note を書き込む（TimemeterHost.setSegmentNote の実体）。
+	 * 時系列レーンの「穴埋め」入力から呼ばれる。text が空なら何もしない。
+	 */
+	async setSegmentNote(date: string, key: string, text: string): Promise<void> {
+		const trimmed = text.trim();
+		if (!trimmed) return;
+		const folder = this.settings.dataFolder;
+		const sessions = await readDay(this.app, folder, date);
+		const updated = setNote(sessions, key, trimmed);
+		await writeDay(this.app, folder, date, updated);
+	}
+
+	/** 記録中/AFK → 一時停止、一時停止 → 再開。state 自体は次 tick で実測に基づき更新される。 */
+	togglePause(): void {
+		if (this.trackerState === "pause") {
+			this.tracker?.resume();
+		} else {
+			this.tracker?.pause();
+		}
+	}
+
+	/** プラグインの設定タブを開く。 */
+	openSettings(): void {
+		// biome-ignore lint: Obsidian の internal API（型定義に無い）にアクセスする。
+		const setting = (this.app as any).setting;
+		setting.open();
+		setting.openTabById(this.manifest.id);
+	}
+
+	private appRule(app: string): AppRule {
+		let rule = this.settings.apps[app];
+		if (!rule) {
+			rule = { hidden: false, captureTitle: true };
+			this.settings.apps[app] = rule;
+		}
+		return rule;
+	}
+
+	isHidden(app: string): boolean {
+		return this.settings.apps[app]?.hidden ?? false;
+	}
+
+	toggleHidden(app: string): void {
+		const rule = this.appRule(app);
+		rule.hidden = !rule.hidden;
+		void this.saveSettings();
+	}
+
+	getCaptureTitle(app: string): boolean {
+		return this.settings.apps[app]?.captureTitle ?? true;
+	}
+
+	toggleCaptureTitle(app: string): void {
+		const rule = this.appRule(app);
+		rule.captureTitle = !rule.captureTitle;
+		void this.saveSettings();
 	}
 
 	/** 「手動ログを追加」コマンドの本体。モバイルでも呼べる。 */

@@ -1,146 +1,546 @@
-/* タイムメーター サイドバービュー（第1版） */
+/* タイムメーター サイドバービュー（今日タブ）。
+   UIモック（タイムメーター - UIモック.html の .ob .sb-* 一式）の見た目を移植する。
+   ハードコード色は Obsidian のテーマ変数に置き換えてあるため、ライト/ダーク両テーマで動く。
+   アプリ色だけは appColor() の固定12色パレットを使う（JS 側で inline style に設定）。 */
 
 .tm-view {
-	padding: 12px 14px;
+	--st-rec: #3ecf74;
+	--st-afk: #9ca3af;
+	--st-pause: #f0b429;
+	--st-err: #f26d6d;
+
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 0;
+	position: relative;
 	font-size: 13px;
+	overflow: hidden;
 }
 
-.tm-header {
+/* ── sb-head ── */
+.tm-view .sb-head {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	margin-bottom: 12px;
+	gap: 8px;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	flex: 0 0 auto;
 }
 
-.tm-pill {
+.tm-view .pill {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	padding: 3px 10px;
 	border-radius: 999px;
-	background: var(--background-secondary);
+	padding: 4px 11px 4px 9px;
 	font-size: 12px;
 	font-weight: 600;
+	color: var(--text-normal);
+	background: var(--background-secondary);
 }
 
-.tm-dot {
+.tm-view .pill .dot {
 	width: 8px;
 	height: 8px;
 	border-radius: 50%;
 	background: var(--text-muted);
+}
+.tm-view[data-state="rec"] .pill .dot {
+	background: var(--st-rec);
+	box-shadow: 0 0 6px var(--st-rec);
+}
+.tm-view[data-state="afk"] .pill .dot {
+	background: var(--st-afk);
+}
+.tm-view[data-state="pause"] .pill .dot {
+	background: var(--st-pause);
+}
+.tm-view[data-state="err"] .pill .dot {
+	background: var(--st-err);
+}
+
+.tm-view .sb-head .spacer {
+	flex: 1;
+}
+
+.tm-view .iconbtn {
+	background: none;
+	border: none;
+	color: var(--text-faint);
+	cursor: pointer;
+	font-size: 14px;
+	padding: 4px 6px;
+	border-radius: 6px;
+	line-height: 1;
+}
+.tm-view .iconbtn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+.tm-view .pill:focus-visible,
+.tm-view .iconbtn:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
+}
+
+/* ── errbar ── */
+.tm-view .errbar {
+	margin: 10px 12px 0;
+	background: color-mix(in srgb, var(--st-err) 14%, transparent);
+	border: 1px solid color-mix(in srgb, var(--st-err) 45%, transparent);
+	color: var(--text-normal);
+	border-radius: 8px;
+	padding: 8px 11px;
+	font-size: 12px;
+	line-height: 1.5;
 	flex: 0 0 auto;
 }
-
-.tm-refresh {
-	background: transparent;
-	border: none;
-	color: var(--text-muted);
-	font-size: 15px;
+.tm-view .errbar a {
+	color: var(--st-err);
+	font-weight: 600;
+	text-decoration: underline;
 	cursor: pointer;
-	padding: 2px 6px;
-	border-radius: 6px;
-}
-.tm-refresh:hover {
-	color: var(--text-normal);
-	background: var(--background-modifier-hover);
 }
 
-.tm-live {
-	background: var(--background-secondary);
-	border-radius: 10px;
-	padding: 12px 14px;
-	margin-bottom: 14px;
+/* ── sb-body / view switching ── */
+.tm-view .sb-body {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	padding: 6px 0 0;
 }
 
-.tm-now-label {
-	font-size: 10px;
-	letter-spacing: 0.12em;
+.tm-view .view {
+	display: none;
+}
+.tm-view .view.on {
+	display: block;
+}
+
+.tm-view .view-placeholder {
+	padding: 20px 16px;
 	color: var(--text-faint);
-	margin-bottom: 4px;
+	font-size: 12px;
+	text-align: center;
 }
 
-.tm-now-row {
+/* ── live ブロック ── */
+.tm-view .live {
+	padding: 16px 16px 14px;
+}
+
+.tm-view .live .now-label {
+	font-size: 11px;
+	letter-spacing: 0.1em;
+	color: var(--text-faint);
+	font-weight: 600;
+}
+
+.tm-view .live .now-app {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-}
-
-.tm-now-app {
-	font-size: 15px;
-	font-weight: 600;
-	color: var(--text-normal);
-}
-
-.tm-now-min {
-	font-size: 30px;
-	font-weight: 700;
-	line-height: 1.1;
-	margin-top: 2px;
-	font-variant-numeric: tabular-nums;
-	color: var(--text-normal);
-}
-
-.tm-today {
+	gap: 9px;
 	margin-top: 6px;
+}
+
+.tm-view .live .appdot {
+	width: 12px;
+	height: 12px;
+	border-radius: 4px;
+	background: var(--text-faint);
+	flex: none;
+}
+
+.tm-view .live .now-app b {
+	font-size: 19px;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	color: var(--text-normal);
+}
+
+.tm-view .live .now-elapsed {
+	font-size: 34px;
+	font-weight: 800;
+	letter-spacing: -0.01em;
+	font-variant-numeric: tabular-nums;
+	margin-top: 2px;
+	line-height: 1.25;
+	color: var(--text-normal);
+}
+.tm-view .live .now-elapsed small {
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--text-muted);
+	margin-left: 2px;
+}
+.tm-view .live .now-elapsed .now-sec {
+	margin-left: 6px;
+}
+
+.tm-view[data-state="afk"] .live .now-app b,
+.tm-view[data-state="afk"] .live .now-elapsed,
+.tm-view[data-state="pause"] .live .now-elapsed {
+	opacity: 0.4;
+}
+
+.tm-view .live .now-sub {
+	display: none;
+	font-size: 12px;
+	color: var(--text-muted);
+	margin-top: 2px;
+}
+.tm-view[data-state="afk"] .now-sub.afk {
+	display: block;
+}
+.tm-view[data-state="pause"] .now-sub.pause {
+	display: block;
+}
+
+.tm-view .live .today-total {
+	margin-top: 10px;
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	font-variant-numeric: tabular-nums;
+}
+.tm-view .live .today-total .lbl {
 	font-size: 12px;
 	color: var(--text-muted);
 }
-
-.tm-section-title {
-	font-size: 11px;
-	font-weight: 600;
-	color: var(--text-muted);
-	margin-bottom: 8px;
+.tm-view .live .today-total .val {
+	font-size: 20px;
+	font-weight: 700;
+	color: var(--text-normal);
 }
 
-.tm-bar-row {
+.tm-view .quick-input {
+	display: block;
+	width: 100%;
+	margin-top: 12px;
+	padding: 7px 10px;
+	border-radius: 8px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-modifier-form-field);
+	color: var(--text-normal);
+	font: inherit;
+	font-size: 12.5px;
+}
+.tm-view .quick-input::placeholder {
+	color: var(--text-faint);
+}
+.tm-view .quick-input:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
+}
+.tm-view .quick-input:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.tm-view .rule {
+	border: none;
+	border-top: 1px solid var(--background-modifier-border);
+	margin: 4px 12px;
+}
+
+/* ── サブタブ（合計/時系列）＋ 未記入バッジ ── */
+.tm-view .subtabs-row {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	margin-bottom: 6px;
+	margin: 10px 16px 4px;
 }
 
-.tm-bar-name {
-	flex: 0 0 34%;
+.tm-view .subtabs {
+	display: flex;
+	gap: 2px;
+	background: var(--background-secondary);
+	border-radius: 8px;
+	padding: 2px;
+	width: max-content;
+}
+.tm-view .subtabs button {
+	background: none;
+	border: none;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 11.5px;
+	padding: 4px 16px;
+	border-radius: 6px;
+	cursor: pointer;
+}
+.tm-view .subtabs button.on {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-weight: 600;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.tm-view .subtabs button:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
+}
+
+.tm-view .subview {
+	display: none;
+}
+.tm-view .subview.on {
+	display: block;
+}
+
+.tm-view .fillin-badge {
+	display: none;
+	align-items: center;
+	font-size: 11px;
+	color: var(--text-muted);
+	background: var(--background-modifier-border);
+	padding: 2px 9px;
+	border-radius: 999px;
+}
+
+/* ── 合計（bars） ── */
+.tm-view .bars {
+	padding: 8px 6px 6px;
+}
+.tm-view .bar-row {
+	display: grid;
+	grid-template-columns: 74px 1fr 52px 20px;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 8px;
+	border-radius: 7px;
+	position: relative;
+}
+.tm-view .bar-row:hover {
+	background: var(--background-modifier-hover);
+}
+.tm-view .bar-row .nm {
 	font-size: 12px;
 	color: var(--text-normal);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
-
-.tm-bar-track {
-	flex: 1 1 auto;
-	height: 10px;
-	background: var(--background-modifier-border);
+.tm-view .bar-row .track {
+	height: 9px;
 	border-radius: 5px;
+	background: var(--background-modifier-form-field);
 	overflow: hidden;
 }
-
-.tm-bar-fill {
+.tm-view .bar-row .fill {
 	height: 100%;
 	border-radius: 5px;
-	min-width: 2px;
 }
-
-.tm-bar-val {
-	flex: 0 0 auto;
-	font-size: 11px;
+.tm-view .bar-row .dur {
+	font-size: 11.5px;
 	color: var(--text-muted);
-	font-variant-numeric: tabular-nums;
-	min-width: 42px;
 	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+.tm-view .bar-row .more {
+	background: none;
+	border: none;
+	color: var(--text-faint);
+	cursor: pointer;
+	font-size: 13px;
+	padding: 0 2px;
+	border-radius: 4px;
+	visibility: hidden;
+	line-height: 1;
+}
+.tm-view .bar-row:hover .more,
+.tm-view .bar-row .more:focus-visible {
+	visibility: visible;
+}
+.tm-view .bar-row.hidden-app .nm,
+.tm-view .bar-row.hidden-app .dur {
+	opacity: 0.35;
+	text-decoration: line-through;
+}
+.tm-view .bar-row.hidden-app .fill {
+	opacity: 0.18;
 }
 
-.tm-empty {
+.tm-view .tm-empty {
 	color: var(--text-faint);
 	font-size: 12px;
-	padding: 8px 0;
+	padding: 8px 16px;
 }
 
-.tm-note {
-	margin-top: 16px;
-	font-size: 11px;
+/* ── コンテキストメニュー ── */
+.tm-view .ctxmenu {
+	position: absolute;
+	z-index: 30;
+	display: none;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 4px;
+	min-width: 190px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.tm-view .ctxmenu.open {
+	display: block;
+}
+.tm-view .ctxmenu button {
+	display: block;
+	width: 100%;
+	text-align: left;
+	background: none;
+	border: none;
+	color: var(--text-normal);
+	font: inherit;
+	font-size: 12.5px;
+	padding: 7px 10px;
+	border-radius: 5px;
+	cursor: pointer;
+}
+.tm-view .ctxmenu button:hover {
+	background: var(--background-modifier-hover);
+}
+.tm-view .ctxmenu .sep {
+	border-top: 1px solid var(--background-modifier-border);
+	margin: 4px 2px;
+}
+
+/* ── 時系列（lanes） ── */
+.tm-view .lanes {
+	padding: 8px 16px 6px;
+}
+.tm-view .lane-hours {
+	display: flex;
+	justify-content: space-between;
+	font-size: 10px;
 	color: var(--text-faint);
+	font-variant-numeric: tabular-nums;
+	margin: 0 0 6px 64px;
+}
+.tm-view .lane-row {
+	display: grid;
+	grid-template-columns: 56px 1fr;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 7px;
+}
+.tm-view .lane-row .nm {
+	font-size: 11px;
+	color: var(--text-muted);
+	text-align: right;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.tm-view .lane {
+	position: relative;
+	height: 18px;
+	border-radius: 5px;
+	background: var(--background-modifier-form-field);
+	overflow: hidden;
+}
+.tm-view .lane .tick {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	background: var(--background-modifier-border);
+	opacity: 0.55;
+}
+.tm-view .lane .seg {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	border-radius: 3px;
+	cursor: default;
+}
+.tm-view .lane .seg.fillable {
+	cursor: pointer;
+}
+.tm-view .lane .seg:hover {
+	filter: brightness(1.2);
+}
+.tm-view .lane .seg.note::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 3px;
+	background: rgba(255, 255, 255, 0.75);
+}
+.tm-view .lane .seg.live {
+	box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55);
+}
+
+/* ── ツールチップ ── */
+.tm-view .tip {
+	position: absolute;
+	z-index: 40;
+	display: none;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 9px 11px;
+	max-width: 240px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+	font-size: 12px;
 	line-height: 1.5;
+	pointer-events: none;
+}
+.tm-view .tip b {
+	display: block;
+	font-size: 12.5px;
+	color: var(--text-normal);
+}
+.tm-view .tip .rng {
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+.tm-view .tip .ttl {
+	color: var(--text-muted);
+	font-size: 11.5px;
+	overflow-wrap: anywhere;
+}
+.tm-view .tip .nt {
+	margin-top: 5px;
+	padding-top: 5px;
+	border-top: 1px dashed var(--background-modifier-border);
+	color: var(--text-normal);
+	font-size: 11.5px;
+}
+.tm-view .tip .nt::before {
+	content: "📝 ";
+}
+
+.tm-view .tl-cap {
+	font-size: 10.5px;
+	color: var(--text-faint);
+	padding: 2px 16px 10px;
+}
+
+/* ── sb-tabs（今日/日別/月） ── */
+.tm-view .sb-tabs {
+	display: flex;
+	gap: 4px;
+	padding: 10px 12px 12px;
+	flex: 0 0 auto;
+}
+.tm-view .sb-tabs button {
+	flex: 1;
+	background: none;
+	border: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	border-radius: 7px;
+	padding: 5px 0;
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+.tm-view .sb-tabs button.on {
+	background: color-mix(in srgb, var(--interactive-accent) 18%, transparent);
+	border-color: color-mix(in srgb, var(--interactive-accent) 55%, transparent);
+	color: var(--text-normal);
+	font-weight: 600;
+}
+.tm-view .sb-tabs button:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
 }
