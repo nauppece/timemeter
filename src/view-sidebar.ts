@@ -4,6 +4,13 @@
 import { type App, ItemView, Notice, type WorkspaceLeaf } from "obsidian";
 import { localDateStr } from "./aggregator";
 import { appColor } from "./appcolor";
+import { dowHeaders, hourLabel, monthTitle, t, weekdayLabel } from "./i18n";
+import {
+	centerAnchoredScrollLeft,
+	laneRange,
+	segPos,
+	tickStepMin,
+} from "./lane-geometry";
 import { QuickLogModal } from "./quicklog-modal";
 import { readDay } from "./store";
 import type { TrackerState } from "./tracker";
@@ -32,15 +39,13 @@ export interface TimemeterHost {
 	toggleCaptureTitle(app: string): void;
 }
 
-const STATE_LABEL: Record<TrackerState, string> = {
-	rec: "記録中",
-	afk: "AFK",
-	pause: "一時停止",
-	err: "権限エラー",
-};
+/** 状態ラベルを現在言語で返す。 */
+function stateLabel(state: TrackerState): string {
+	return t(`state.${state}`);
+}
 
-const WEEKDAY_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const DOW_JA = ["月", "火", "水", "木", "金", "土", "日"];
+/** ズーム段階（1x〜4x）。時系列レーンの横方向拡大に使う。 */
+const ZOOM_LEVELS = [1, 2, 3, 4];
 
 function pad2(n: number): string {
 	return String(n).padStart(2, "0");
@@ -59,22 +64,24 @@ function addDays(dateStr: string, delta: number): string {
 	return localDateStr(d.getTime());
 }
 
-/** "YYYY-MM-DD (Wed)" 形式のラベル */
+/** "YYYY-MM-DD (Wed)" 形式のラベル（曜日は現在言語）。 */
 function dayLabel(dateStr: string): string {
 	const d = parseLocalDate(dateStr);
-	return `${dateStr} (${WEEKDAY_EN[d.getDay()]})`;
+	return `${dateStr} (${weekdayLabel(d.getDay())})`;
 }
 
 type SubtabName = "bars" | "lanes";
 type TabName = "today" | "day" | "month";
 
-/** renderLanes に渡す表示コンテキスト（日別/今日で異なる date・ライブ強調・保存後コールバックを渡す）。 */
+/** renderLanes に渡す表示コンテキスト（日別/今日で異なる date・ライブ強調・保存後コールバック・ズーム状態を渡す）。 */
 interface LanesOpts {
 	date: string;
 	liveKey: string | null;
 	allowFillIn: boolean;
 	onSaved: () => Promise<void>;
 	emptyMessage?: string;
+	getZoom: () => number;
+	setZoom: (z: number) => void;
 }
 
 export class TimemeterView extends ItemView {
@@ -143,6 +150,10 @@ export class TimemeterView extends ItemView {
 	private currentDate = "";
 	private liveSessionKey: string | null = null;
 
+	// ── 時系列ズーム（今日/日別で独立・セッション内のみ保持。開き直すと 1x）
+	private zoom = 1;
+	private dayZoom = 1;
+
 	constructor(leaf: WorkspaceLeaf, host: TimemeterHost) {
 		super(leaf);
 		this.host = host;
@@ -153,7 +164,14 @@ export class TimemeterView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return "タイムメーター";
+		return t("app.name");
+	}
+
+	/** 言語変更時に DOM を現在言語で作り直す（onOpen 登録のインターバルはそのまま流用）。 */
+	rebuild(): void {
+		this.build();
+		this.updateLive();
+		void this.refresh();
 	}
 
 	getIcon(): string {
@@ -188,19 +206,19 @@ export class TimemeterView extends ItemView {
 		const head = root.createDiv({ cls: "sb-head" });
 		const pill = head.createDiv({ cls: "pill" });
 		pill.createSpan({ cls: "dot" });
-		this.pillLabelEl = pill.createSpan({ text: STATE_LABEL.rec });
+		this.pillLabelEl = pill.createSpan({ text: stateLabel("rec") });
 		head.createDiv({ cls: "spacer" });
 		this.pauseBtnEl = head.createEl("button", { cls: "iconbtn", text: "⏸" });
-		this.pauseBtnEl.setAttr("aria-label", "一時停止/再開");
+		this.pauseBtnEl.setAttr("aria-label", t("head.pauseResume"));
 		this.pauseBtnEl.addEventListener("click", () => this.host.togglePause());
 		const settingsBtn = head.createEl("button", { cls: "iconbtn", text: "⚙︎" });
-		settingsBtn.setAttr("aria-label", "設定");
+		settingsBtn.setAttr("aria-label", t("head.settings"));
 		settingsBtn.addEventListener("click", () => this.host.openSettings());
 
 		// ── errbar: 権限エラー時のみ表示
 		this.errbarEl = root.createDiv({ cls: "errbar" });
-		this.errbarEl.appendText("⚠️ オートメーション権限が未許可のため記録できません。");
-		const errLink = this.errbarEl.createEl("a", { text: "設定方法を見る" });
+		this.errbarEl.appendText(t("err.noPermission"));
+		const errLink = this.errbarEl.createEl("a", { text: t("err.howToSetUp") });
 		errLink.addEventListener("click", () => this.host.openSettings());
 		this.errbarEl.style.display = "none";
 
@@ -218,19 +236,19 @@ export class TimemeterView extends ItemView {
 
 		// ── sb-tabs
 		const tabs = root.createDiv({ cls: "sb-tabs" });
-		this.todayTabBtn = tabs.createEl("button", { cls: "on", text: "今日" });
-		this.dayTabBtn = tabs.createEl("button", { text: "日別" });
-		this.monthTabBtn = tabs.createEl("button", { text: "月" });
+		this.todayTabBtn = tabs.createEl("button", { cls: "on", text: t("tab.today") });
+		this.dayTabBtn = tabs.createEl("button", { text: t("tab.day") });
+		this.monthTabBtn = tabs.createEl("button", { text: t("tab.month") });
 		this.todayTabBtn.addEventListener("click", () => this.selectTab("today"));
 		this.dayTabBtn.addEventListener("click", () => this.selectTab("day"));
 		this.monthTabBtn.addEventListener("click", () => this.selectTab("month"));
 
 		// ── コンテキストメニュー・ツールチップ（root 直下に置き、絶対配置の基準を root にする）
 		this.ctxmenuEl = root.createDiv({ cls: "ctxmenu" });
-		this.ctxHideBtn = this.ctxmenuEl.createEl("button", { text: "👁 非表示にする" });
-		this.ctxCaptureBtn = this.ctxmenuEl.createEl("button", { text: "🏷 タイトル取込を OFF にする" });
+		this.ctxHideBtn = this.ctxmenuEl.createEl("button");
+		this.ctxCaptureBtn = this.ctxmenuEl.createEl("button", { text: t("ctx.captureOff") });
 		this.ctxmenuEl.createDiv({ cls: "sep" });
-		this.ctxSettingsBtn = this.ctxmenuEl.createEl("button", { text: "⚙︎ 設定でまとめて管理…" });
+		this.ctxSettingsBtn = this.ctxmenuEl.createEl("button", { text: t("ctx.manageInSettings") });
 		this.ctxHideBtn.addEventListener("click", () => {
 			if (this.ctxApp) this.host.toggleHidden(this.ctxApp);
 			this.ctxmenuEl?.removeClass("open");
@@ -253,22 +271,22 @@ export class TimemeterView extends ItemView {
 	private buildTodayView(container: HTMLElement): void {
 		// ── live ブロック
 		const live = container.createDiv({ cls: "live" });
-		live.createDiv({ cls: "now-label", text: "NOW" });
+		live.createDiv({ cls: "now-label", text: t("live.now") });
 		const nowApp = live.createDiv({ cls: "now-app" });
 		this.nowDotEl = nowApp.createSpan({ cls: "appdot" });
-		this.nowAppEl = nowApp.createEl("b", { text: "—" });
+		this.nowAppEl = nowApp.createEl("b", { text: t("common.dash") });
 		const nowElapsed = live.createDiv({ cls: "now-elapsed" });
-		this.nowMinEl = nowElapsed.createSpan({ text: "—" });
-		nowElapsed.createEl("small", { text: "分" });
+		this.nowMinEl = nowElapsed.createSpan({ text: t("common.dash") });
+		nowElapsed.createEl("small", { text: t("live.min") });
 		this.nowSecEl = nowElapsed.createEl("small", { cls: "now-sec" });
-		this.nowSubAfkEl = live.createDiv({ cls: "now-sub afk", text: "💤 無操作 — 記録を停止中" });
-		this.nowSubPauseEl = live.createDiv({ cls: "now-sub pause", text: "⏸ 一時停止中 — 再開までは記録しません" });
+		this.nowSubAfkEl = live.createDiv({ cls: "now-sub afk", text: t("live.idle") });
+		this.nowSubPauseEl = live.createDiv({ cls: "now-sub pause", text: t("live.paused") });
 		const total = live.createDiv({ cls: "today-total" });
-		total.createSpan({ cls: "lbl", text: "今日合計" });
+		total.createSpan({ cls: "lbl", text: t("live.todayTotal") });
 		this.todayTotalValEl = total.createSpan({ cls: "val", text: "0m" });
 
 		this.quickInputEl = live.createEl("input", { cls: "quick-input", type: "text" });
-		this.quickInputEl.placeholder = "いま何してる？ Enterで記録";
+		this.quickInputEl.placeholder = t("live.quickPlaceholder");
 		this.quickInputEl.addEventListener("keydown", (ev: KeyboardEvent) => {
 			if (ev.key !== "Enter") return;
 			ev.preventDefault();
@@ -279,7 +297,7 @@ export class TimemeterView extends ItemView {
 				await this.host.setCurrentNote(trimmed);
 				if (this.quickInputEl) this.quickInputEl.value = "";
 				await this.refresh();
-				new Notice("メモを記録しました");
+				new Notice(t("notice.noteSaved"));
 			})();
 		});
 
@@ -288,8 +306,8 @@ export class TimemeterView extends ItemView {
 		// ── サブタブ（合計/時系列）＋ 未記入バッジ
 		const subtabsRow = container.createDiv({ cls: "subtabs-row" });
 		const subtabs = subtabsRow.createDiv({ cls: "subtabs" });
-		this.subtabBarsBtn = subtabs.createEl("button", { cls: "on", text: "合計" });
-		this.subtabLanesBtn = subtabs.createEl("button", { text: "時系列" });
+		this.subtabBarsBtn = subtabs.createEl("button", { cls: "on", text: t("subtab.bars") });
+		this.subtabLanesBtn = subtabs.createEl("button", { text: t("subtab.lanes") });
 		this.subtabBarsBtn.addEventListener("click", () => this.selectSubtab("bars"));
 		this.subtabLanesBtn.addEventListener("click", () => this.selectSubtab("lanes"));
 		this.badgeEl = subtabsRow.createSpan({ cls: "fillin-badge" });
@@ -300,7 +318,7 @@ export class TimemeterView extends ItemView {
 
 		container.createDiv({
 			cls: "tl-cap",
-			text: "ホバーで詳細 / クリックで説明を追記（📝＝説明あり）",
+			text: t("tl.caption"),
 		});
 	}
 
@@ -314,14 +332,14 @@ export class TimemeterView extends ItemView {
 		this.dayNextBtn.addEventListener("click", () => this.shiftDay(1));
 
 		const totalRow = container.createDiv({ cls: "day-total" });
-		totalRow.appendText("合計 ");
+		totalRow.appendText(t("day.totalPrefix"));
 		this.dayTotalValEl = totalRow.createEl("b", { text: "0m" });
 
 		container.createEl("hr", { cls: "rule" });
 
 		const subtabs = container.createDiv({ cls: "subtabs" });
-		this.daySubtabBarsBtn = subtabs.createEl("button", { cls: "on", text: "合計" });
-		this.daySubtabLanesBtn = subtabs.createEl("button", { text: "時系列" });
+		this.daySubtabBarsBtn = subtabs.createEl("button", { cls: "on", text: t("subtab.bars") });
+		this.daySubtabLanesBtn = subtabs.createEl("button", { text: t("subtab.lanes") });
 		this.daySubtabBarsBtn.addEventListener("click", () => this.selectDaySubtab("bars"));
 		this.daySubtabLanesBtn.addEventListener("click", () => this.selectDaySubtab("lanes"));
 
@@ -335,12 +353,12 @@ export class TimemeterView extends ItemView {
 		this.monthTitleEl = month.createDiv({ cls: "m-title" });
 		this.monthGridEl = month.createDiv({ cls: "m-grid" });
 		const legend = month.createDiv({ cls: "m-legend" });
-		legend.appendText("少 ");
+		legend.appendText(`${t("month.legendLess")} `);
 		legend.createEl("i", { attr: { style: "background:var(--background-modifier-border)" } });
 		this.monthLg1El = legend.createEl("i");
 		this.monthLg2El = legend.createEl("i");
 		this.monthLg3El = legend.createEl("i");
-		legend.appendText(" 多（日クリックで日別へ）");
+		legend.appendText(` ${t("month.legendMore")}`);
 	}
 
 	private selectSubtab(which: SubtabName): void {
@@ -372,8 +390,9 @@ export class TimemeterView extends ItemView {
 		if (name === "month") void this.refreshMonth();
 	}
 
-	/** コンテキストメニュー操作（非表示/タイトル取込トグル）の後、現在アクティブなタブだけを再描画する。 */
-	private refreshActive(): void {
+	/** コンテキストメニュー操作（非表示/タイトル取込トグル）の後、現在アクティブなタブだけを再描画する。
+	 *  設定タブからのアプリ除外変更でも呼ばれる（refreshOpenViews 経由）。 */
+	refreshActive(): void {
 		if (this.activeTab === "today") void this.refresh();
 		else if (this.activeTab === "day") void this.refreshDayView();
 		else if (this.activeTab === "month") void this.refreshMonth();
@@ -383,13 +402,13 @@ export class TimemeterView extends ItemView {
 	private updateLive(): void {
 		const state = this.host.getState();
 		this.contentEl.setAttr("data-state", state);
-		if (this.pillLabelEl) this.pillLabelEl.setText(STATE_LABEL[state]);
+		if (this.pillLabelEl) this.pillLabelEl.setText(stateLabel(state));
 		if (this.pauseBtnEl) this.pauseBtnEl.setText(state === "pause" ? "▶" : "⏸");
 		if (this.errbarEl) this.errbarEl.style.display = state === "err" ? "block" : "none";
 
 		const app = this.host.getCurrentApp();
 		const start = this.host.getCurrentStart();
-		if (this.nowAppEl) this.nowAppEl.setText(app ?? "—");
+		if (this.nowAppEl) this.nowAppEl.setText(app ?? t("common.dash"));
 		if (this.nowDotEl) this.nowDotEl.style.background = app ? appColor(app) : "transparent";
 
 		// 経過分秒は記録中（rec）のときだけ更新する。AFK/一時停止/エラー中は最後に
@@ -399,10 +418,10 @@ export class TimemeterView extends ItemView {
 			const wholeMin = Math.max(0, Math.floor(elapsedMs / 60000));
 			const sec = Math.floor((elapsedMs % 60000) / 1000);
 			this.nowMinEl?.setText(String(wholeMin));
-			this.nowSecEl?.setText(`${String(sec).padStart(2, "0")}秒`);
+			this.nowSecEl?.setText(`${String(sec).padStart(2, "0")}${t("live.secSuffix")}`);
 		} else if (!app) {
 			// 現在アプリが無い（モバイル／トラッカー未起動）: プレースホルダのまま。
-			this.nowMinEl?.setText("—");
+			this.nowMinEl?.setText(t("common.dash"));
 			this.nowSecEl?.setText("");
 		}
 
@@ -410,8 +429,8 @@ export class TimemeterView extends ItemView {
 			const enabled = !!app;
 			this.quickInputEl.disabled = !enabled;
 			this.quickInputEl.placeholder = enabled
-				? "いま何してる？ Enterで記録"
-				: "記録中のアプリがありません";
+				? t("live.quickPlaceholder")
+				: t("live.quickDisabled");
 		}
 	}
 
@@ -428,12 +447,17 @@ export class TimemeterView extends ItemView {
 		this.liveSessionKey = app ? this.pickLatestKey(sessions, app) : null;
 
 		this.updateTodayTotal(sessions);
-		this.renderBars(this.barsEl, sessions);
+		this.renderBars(this.barsEl, sessions, t("bars.emptyToday"));
 		this.renderLanes(this.lanesEl, sessions, {
 			date: this.currentDate,
 			liveKey: this.liveSessionKey,
 			allowFillIn: true,
 			onSaved: () => this.refresh(),
+			emptyMessage: t("lanes.emptyToday"),
+			getZoom: () => this.zoom,
+			setZoom: (z) => {
+				this.zoom = z;
+			},
 		});
 		this.updateBadge(sessions);
 	}
@@ -480,14 +504,17 @@ export class TimemeterView extends ItemView {
 		const app = this.host.getCurrentApp();
 		const liveKey = this.dayViewDate === todayStr && app ? this.pickLatestKey(sessions, app) : null;
 
-		const emptyMessage = "この日の記録はありません";
-		this.renderBars(this.dayBarsEl, sessions, emptyMessage);
+		this.renderBars(this.dayBarsEl, sessions, t("bars.emptyDay"));
 		this.renderLanes(this.dayLanesEl, sessions, {
 			date: this.dayViewDate,
 			liveKey,
 			allowFillIn: true,
 			onSaved: () => this.refreshDayView(),
-			emptyMessage,
+			emptyMessage: t("lanes.emptyDay"),
+			getZoom: () => this.dayZoom,
+			setZoom: (z) => {
+				this.dayZoom = z;
+			},
 		});
 	}
 
@@ -497,7 +524,7 @@ export class TimemeterView extends ItemView {
 		const year = now.getFullYear();
 		const month = now.getMonth() + 1; // 1-12
 		const todayStr = localDateStr(Date.now());
-		this.monthTitleEl?.setText(`${year}年${month}月`);
+		this.monthTitleEl?.setText(monthTitle(year, month));
 
 		const daysInMonth = new Date(year, month, 0).getDate();
 		const dateStrs: string[] = [];
@@ -541,7 +568,7 @@ export class TimemeterView extends ItemView {
 		if (!grid) return;
 		grid.empty();
 
-		for (const d of DOW_JA) grid.createDiv({ cls: "dow", text: d });
+		for (const d of dowHeaders()) grid.createDiv({ cls: "dow", text: d });
 
 		// 日曜=0 の getDay() を月曜始まりのオフセットに変換
 		const firstDow = new Date(year, month - 1, 1).getDay();
@@ -569,7 +596,7 @@ export class TimemeterView extends ItemView {
 			if (level > 0) {
 				cell.style.background = `color-mix(in srgb, var(--interactive-accent) ${levelPct[level - 1]}%, var(--background-modifier-border))`;
 			}
-			cell.setAttr("title", `${ds} — ${total > 0 ? fmtDur(total) : "記録なし"}`);
+			cell.setAttr("title", `${ds} — ${total > 0 ? fmtDur(total) : t("common.noRecords")}`);
 			cell.addEventListener("click", () => {
 				this.dayViewDate = ds;
 				this.selectTab("day");
@@ -581,7 +608,7 @@ export class TimemeterView extends ItemView {
 		if (!this.badgeEl) return;
 		const count = sessions.filter((s) => !s.manual && !this.host.isHidden(s.app) && s.note.trim() === "").length;
 		if (count > 0) {
-			this.badgeEl.setText(`残り ${count}件`);
+			this.badgeEl.setText(t("badge.left", { n: count }));
 			this.badgeEl.style.display = "inline-flex";
 		} else {
 			this.badgeEl.setText("");
@@ -589,14 +616,15 @@ export class TimemeterView extends ItemView {
 		}
 	}
 
-	/** モックの renderBars 準拠: アプリ別合計バー。hidden 行は幅0・"—"・薄色、⋯/右クリックでコンテキストメニュー。
-	 *  今日/日別タブ共通で使う（container を呼び出し側から渡す）。 */
-	private renderBars(bars: HTMLElement | null, sessions: Session[], emptyMessage = "まだ記録がありません"): void {
+	/** アプリ別合計バー。除外（hidden）アプリは行ごと描画しない（時系列・合計から完全に消す）。
+	 *  ⋯/右クリックでコンテキストメニュー。今日/日別タブ共通で使う（container を呼び出し側から渡す）。 */
+	private renderBars(bars: HTMLElement | null, sessions: Session[], emptyMessage = t("bars.emptyToday")): void {
 		if (!bars) return;
 		bars.empty();
 
 		const totals = new Map<string, number>();
 		for (const s of sessions) {
+			if (this.host.isHidden(s.app)) continue; // 除外アプリは合計に含めない・行も出さない
 			totals.set(s.app, (totals.get(s.app) ?? 0) + durMin(s));
 		}
 		const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
@@ -605,22 +633,18 @@ export class TimemeterView extends ItemView {
 			return;
 		}
 
-		let visMax = 0;
-		for (const [app, min] of sorted) {
-			if (!this.host.isHidden(app) && min > visMax) visMax = min;
-		}
+		const visMax = sorted[0][1]; // 降順なので先頭が最大
 
 		for (const [app, min] of sorted) {
-			const hidden = this.host.isHidden(app);
-			const row = bars.createDiv({ cls: hidden ? "bar-row hidden-app" : "bar-row" });
+			const row = bars.createDiv({ cls: "bar-row" });
 			row.createSpan({ cls: "nm", text: app });
 			const track = row.createDiv({ cls: "track" });
 			const fill = track.createDiv({ cls: "fill" });
-			fill.style.width = hidden ? "0%" : `${visMax > 0 ? Math.max(3, (min / visMax) * 100) : 0}%`;
+			fill.style.width = `${visMax > 0 ? Math.max(3, (min / visMax) * 100) : 0}%`;
 			fill.style.background = appColor(app);
-			row.createSpan({ cls: "dur", text: hidden ? "—" : fmtDur(min) });
+			row.createSpan({ cls: "dur", text: fmtDur(min) });
 			const more = row.createEl("button", { cls: "more", text: "⋯" });
-			more.setAttr("title", "クイック操作");
+			more.setAttr("title", t("bars.more"));
 			more.addEventListener("click", (ev) => {
 				ev.stopPropagation();
 				this.openCtx(ev as MouseEvent, app);
@@ -632,47 +656,98 @@ export class TimemeterView extends ItemView {
 		}
 	}
 
-	/** モックの renderLanes 準拠: アプリごとのレーンに時刻でセグメントを置く。
-	 *  今日/日別タブ共通で使う（container・date・ライブ強調キー・穴埋め可否を opts で渡す）。 */
+	/** アプリごとのレーンに時刻でセグメントを置く。段階ズーム（＋/−）＋横スクロールに対応。
+	 *  内側 `.lane-scroll-inner` の幅を zoom 倍にし、既存の left%/width% 計算はそのまま流用する。
+	 *  アプリ名列（nm）は sticky で左に固定。今日/日別タブ共通（zoom 状態は opts 経由で各タブ独立）。 */
 	private renderLanes(lanes: HTMLElement | null, sessions: Session[], opts: LanesOpts): void {
 		if (!lanes) return;
 		lanes.empty();
 
 		if (sessions.length === 0) {
-			lanes.createDiv({ cls: "tm-empty", text: opts.emptyMessage ?? "まだ記録がありません" });
+			lanes.createDiv({ cls: "tm-empty", text: opts.emptyMessage ?? t("lanes.emptyToday") });
 			return;
 		}
 
 		const visible = sessions.filter((s) => !this.host.isHidden(s.app));
-		const base = visible.length > 0 ? visible : sessions;
-		let lo = Math.min(...base.map((s) => toMin(s.start)));
-		let hi = Math.max(...base.map((s) => toMin(s.end)));
-		lo = Math.floor(lo / 60) * 60;
-		hi = Math.ceil(hi / 60) * 60;
-		if (hi <= lo) hi = lo + 60;
-		const span = hi - lo;
-
-		const hoursEl = lanes.createDiv({ cls: "lane-hours" });
-		const step = span > 480 ? 120 : 60;
-		for (let m = lo; m <= hi; m += step) {
-			hoursEl.createSpan({ text: `${Math.floor(m / 60)}時` });
-		}
-
 		const totals = new Map<string, number>();
 		for (const s of visible) totals.set(s.app, (totals.get(s.app) ?? 0) + durMin(s));
 		const apps = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([a]) => a);
 
 		if (apps.length === 0) {
-			lanes.createDiv({ cls: "tm-empty", text: "表示中のアプリがありません" });
+			lanes.createDiv({ cls: "tm-empty", text: t("lanes.noVisibleApps") });
 			return;
 		}
 
+		const { lo, hi, span } = laneRange(visible);
+
+		// 表示中のズーム段階（保存値が段階外なら 1x に丸める）。
+		const zoom = ZOOM_LEVELS.includes(opts.getZoom()) ? opts.getZoom() : 1;
+		const idx = ZOOM_LEVELS.indexOf(zoom);
+
+		// ── ズームバー（− / {z}x / +）
+		const zoombar = lanes.createDiv({ cls: "lane-zoombar" });
+		const zoutBtn = zoombar.createEl("button", { cls: "zbtn", text: "−" });
+		zoutBtn.setAttr("aria-label", t("lanes.zoomOut"));
+		zoombar.createSpan({ cls: "zlabel", text: `${zoom}x` });
+		const zinBtn = zoombar.createEl("button", { cls: "zbtn", text: "+" });
+		zinBtn.setAttr("aria-label", t("lanes.zoomIn"));
+		zoutBtn.disabled = idx <= 0;
+		zinBtn.disabled = idx >= ZOOM_LEVELS.length - 1;
+
+		// ── 横スクロールコンテナ（内側を zoom 倍幅にしてはみ出しをスクロールで見る）
+		const scrollEl = lanes.createDiv({ cls: "lane-scroll" });
+		const inner = scrollEl.createDiv({ cls: "lane-scroll-inner" });
+		inner.style.width = `${zoom * 100}%`;
+
+		// ズーム変更: 再描画前後で中央の時刻を保つよう scrollLeft を引き継ぐ。
+		const applyZoom = (nextZoom: number) => {
+			const viewportW = scrollEl.clientWidth;
+			const prevScrollLeft = scrollEl.scrollLeft;
+			const prevInnerW = inner.scrollWidth;
+			opts.setZoom(nextZoom);
+			this.renderLanes(lanes, sessions, opts);
+			const newScroll = lanes.querySelector<HTMLElement>(".lane-scroll");
+			const newInner = newScroll?.querySelector<HTMLElement>(".lane-scroll-inner");
+			if (newScroll && newInner) {
+				newScroll.scrollLeft = centerAnchoredScrollLeft(
+					prevScrollLeft,
+					prevInnerW,
+					newInner.scrollWidth,
+					viewportW,
+				);
+			}
+		};
+		zoutBtn.addEventListener("click", () => {
+			if (idx > 0) applyZoom(ZOOM_LEVELS[idx - 1]);
+		});
+		zinBtn.addEventListener("click", () => {
+			if (idx < ZOOM_LEVELS.length - 1) applyZoom(ZOOM_LEVELS[idx + 1]);
+		});
+		this.attachDragPan(scrollEl);
+
+		const step = tickStepMin(span, zoom);
+		const hourText = (m: number): string => {
+			const h = Math.floor(m / 60);
+			const mm = m % 60;
+			return mm === 0 && step >= 60 ? hourLabel(h) : `${h}:${pad2(mm)}`;
+		};
+
+		// ── 時刻ヘッダー（nm 幅ぶんの spacer ＋ 絶対配置ラベル。レーンと同じ flex:1 で整列）
+		const hoursEl = inner.createDiv({ cls: "lane-hours" });
+		hoursEl.createDiv({ cls: "lane-hours-spacer" });
+		const hoursTrack = hoursEl.createDiv({ cls: "lane-hours-track" });
+		for (let m = lo; m <= hi; m += step) {
+			const lab = hoursTrack.createSpan({ cls: "hlabel", text: hourText(m) });
+			lab.style.left = `${((m - lo) / span) * 100}%`;
+			if (m + step > hi) lab.style.transform = "translateX(-100%)"; // 右端ラベルは内側に寄せる
+		}
+
 		for (const app of apps) {
-			const row = lanes.createDiv({ cls: "lane-row" });
+			const row = inner.createDiv({ cls: "lane-row" });
 			const nm = row.createSpan({ cls: "nm", text: app });
 			nm.setAttr("title", app);
 			const lane = row.createDiv({ cls: "lane" });
-			for (let m = lo + 60; m < hi; m += 60) {
+			for (let m = lo + step; m < hi; m += step) {
 				const tick = lane.createDiv({ cls: "tick" });
 				tick.style.left = `${((m - lo) / span) * 100}%`;
 			}
@@ -680,20 +755,19 @@ export class TimemeterView extends ItemView {
 				if (s.app !== app) continue;
 				const isLive = sessionKey(s) === opts.liveKey;
 				const hasNote = s.note.trim().length > 0;
-				const startMin = toMin(s.start);
-				const endMin = toMin(s.end);
+				const { leftPct, widthPct } = segPos(toMin(s.start), toMin(s.end), lo, span);
 				const cls = ["seg"];
 				if (hasNote) cls.push("note");
 				if (isLive) cls.push("live");
 				const seg = lane.createDiv({ cls: cls.join(" ") });
-				seg.style.left = `${((startMin - lo) / span) * 100}%`;
-				seg.style.width = `${Math.max(0.6, ((endMin - startMin) / span) * 100)}%`;
+				seg.style.left = `${leftPct}%`;
+				seg.style.width = `${widthPct}%`;
 				seg.style.background = appColor(app);
 				this.attachTip(seg, s, isLive);
 				// 穴埋め: note が空の非手動セグメントはクリックで簡易入力を開く（許可されている場合のみ）。
 				if (opts.allowFillIn && !s.manual && !hasNote) {
 					seg.addClass("fillable");
-					seg.setAttr("title", "クリックで説明を追記");
+					seg.setAttr("title", t("lanes.clickToNote"));
 					seg.addEventListener("click", (ev) => {
 						ev.stopPropagation();
 						this.openFillIn(s, opts.date, opts.onSaved);
@@ -703,6 +777,47 @@ export class TimemeterView extends ItemView {
 		}
 	}
 
+	/**
+	 * 時系列スクローラのドラッグでのパン（横移動）。セグメント上の pointerdown は無視して
+	 * 穴埋めクリックを優先する。4px 以上動いて初めてパン扱いにする（クリックと区別）。
+	 * ハンドラは毎回作り直す scrollEl に付けるので、再描画で古いものは GC される（蓄積しない）。
+	 */
+	private attachDragPan(scrollEl: HTMLElement): void {
+		let down = false;
+		let moved = false;
+		let startX = 0;
+		let startScroll = 0;
+		scrollEl.addEventListener("pointerdown", (ev) => {
+			if (ev.button !== 0) return;
+			if ((ev.target as HTMLElement).closest(".seg")) return; // セグメントはクリック優先
+			down = true;
+			moved = false;
+			startX = ev.clientX;
+			startScroll = scrollEl.scrollLeft;
+			scrollEl.setPointerCapture(ev.pointerId);
+		});
+		scrollEl.addEventListener("pointermove", (ev) => {
+			if (!down) return;
+			const dx = ev.clientX - startX;
+			if (!moved && Math.abs(dx) < 4) return;
+			moved = true;
+			scrollEl.addClass("grabbing");
+			scrollEl.scrollLeft = startScroll - dx;
+		});
+		const end = (ev: PointerEvent) => {
+			if (!down) return;
+			down = false;
+			scrollEl.removeClass("grabbing");
+			try {
+				scrollEl.releasePointerCapture(ev.pointerId);
+			} catch {
+				/* capture 済みでない場合は無視 */
+			}
+		};
+		scrollEl.addEventListener("pointerup", end);
+		scrollEl.addEventListener("pointercancel", end);
+	}
+
 	/** モックの attachTip 準拠: セグメントに hover で詳細ツールチップを出す。 */
 	private attachTip(seg: HTMLElement, s: Session, isLive: boolean): void {
 		const tip = this.tipEl;
@@ -710,9 +825,9 @@ export class TimemeterView extends ItemView {
 		if (!tip) return;
 		seg.addEventListener("mouseenter", () => {
 			tip.empty();
-			tip.createEl("b", { text: s.app + (isLive ? "（記録中）" : "") });
+			tip.createEl("b", { text: s.app + (isLive ? t("tip.recording") : "") });
 			const rng = tip.createDiv({ cls: "rng" });
-			rng.setText(`${s.start} – ${isLive ? "現在" : s.end}（${fmtDur(durMin(s))}）`);
+			rng.setText(`${s.start} – ${isLive ? t("tip.now") : s.end} (${fmtDur(durMin(s))})`);
 			if (s.title) tip.createDiv({ cls: "ttl", text: s.title });
 			if (s.note) tip.createDiv({ cls: "nt", text: s.note });
 			tip.style.display = "block";
@@ -735,9 +850,9 @@ export class TimemeterView extends ItemView {
 		if (!ctx) return;
 		this.ctxApp = app;
 		const hidden = this.host.isHidden(app);
-		this.ctxHideBtn?.setText(hidden ? `👁 「${app}」を再表示する` : `👁 「${app}」を非表示にする`);
+		this.ctxHideBtn?.setText(hidden ? t("ctx.show", { app }) : t("ctx.hide", { app }));
 		const capture = this.host.getCaptureTitle(app);
-		this.ctxCaptureBtn?.setText(capture ? "🏷 タイトル取込を OFF にする" : "🏷 タイトル取込を ON にする");
+		this.ctxCaptureBtn?.setText(capture ? t("ctx.captureOff") : t("ctx.captureOn"));
 		ctx.addClass("open");
 		const rootR = root.getBoundingClientRect();
 		const x = Math.max(4, Math.min(ev.clientX - rootR.left, rootR.width - 210));
@@ -749,13 +864,13 @@ export class TimemeterView extends ItemView {
 	/** note が空のセグメントをクリックしたときの簡易入力（QuickLogModal 流用）。今日/日別タブ共通。 */
 	private openFillIn(session: Session, date: string, onSaved: () => Promise<void>): void {
 		const label = `${session.app} ${session.start}–${session.end}`;
-		new QuickLogModal(this.host.app, `${label} の説明を追記`, "何をしていましたか", (text) => {
+		new QuickLogModal(this.host.app, t("modal.fillInTitle", { label }), t("modal.whatWereDoing"), (text) => {
 			const trimmed = text.trim();
 			if (!trimmed) return; // 空入力はキャンセル扱い（既存 note を空で消さない）
 			void (async () => {
 				await this.host.setSegmentNote(date, sessionKey(session), trimmed);
 				await onSaved();
-				new Notice("メモを記録しました");
+				new Notice(t("notice.noteSaved"));
 			})();
 		}).open();
 	}

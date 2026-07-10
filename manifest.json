@@ -1,8 +1,8 @@
 {
   "id": "timemeter",
-  "name": "タイムメーター",
+  "name": "TimeMeter",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
-  "description": "最前面アプリを自動追跡して Markdown に記録するタイムトラッカー（macOS 追跡・モバイル閲覧/手動ログ）",
+  "description": "Time tracker that auto-tracks the frontmost app and records it to Markdown (macOS tracking; mobile viewing / manual logging).",
   "isDesktopOnly": false
 }

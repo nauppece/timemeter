@@ -1,6 +1,8 @@
 // 共有型・定数・純粋なヘルパー関数。
 // obsidian をインポートしない（テストから直接 import できるようにするため）。
 
+import type { Lang } from "./i18n";
+
 export interface Poll {
 	ts: number;
 	app: string;
@@ -31,6 +33,7 @@ export interface TimemeterSettings {
 	apps: Record<string, AppRule>;
 	showStatusBar: boolean;
 	showSidebarOnStart: boolean;
+	lang: Lang; // UI 表示言語（既定は英語）
 }
 
 export const DEFAULT_SETTINGS: TimemeterSettings = {
@@ -41,6 +44,7 @@ export const DEFAULT_SETTINGS: TimemeterSettings = {
 	apps: {},
 	showStatusBar: true,
 	showSidebarOnStart: true,
+	lang: "en",
 };
 
 export const MANUAL_APP = "✍️ 手動";

@@ -1,6 +1,7 @@
 // 日報下書き生成の純粋関数。
 // obsidian をインポートしない（テストから直接 import できるようにするため）。
 
+import { t } from "./i18n";
 import { durMin, fmtDur, toMin, type Session } from "./types";
 
 interface NoteLine {
@@ -35,7 +36,7 @@ function buildOtherLine(sessions: Session[]): string | null {
 	const parts = [...totals.entries()]
 		.sort((a, b) => b[1] - a[1])
 		.map(([app, min]) => `${app} ${fmtDur(min)}`);
-	return `- その他: ${parts.join(", ")}`;
+	return `- ${t("nippou.other")}: ${parts.join(", ")}`;
 }
 
 /**
@@ -62,12 +63,16 @@ export function buildNippou(sessions: Session[]): string[] {
 // daily-embed.ts の insertTimemeterBlock と同じ方針: obsidian をインポートしない、
 // マーカー外の既存本文は一切変更しない、二重挿入を検出したら null を返す。
 
-const CALLOUT_HEADER = "> [!note] タイムメーター下書き";
 const TARGET_HEADING = "## ✅ やったこと";
 
-/** ファイル内に既に日報下書き callout があるか（二重挿入防止用）。 */
+/** 現在言語の callout ヘッダー行。 */
+function calloutHeader(): string {
+	return t("nippou.calloutHeader");
+}
+
+/** ファイル内に既に日報下書き callout があるか（二重挿入防止用・現在言語のヘッダーで判定）。 */
 export function hasNippouCallout(content: string): boolean {
-	return content.includes(CALLOUT_HEADER);
+	return content.includes(calloutHeader());
 }
 
 /**
@@ -80,7 +85,7 @@ export function hasNippouCallout(content: string): boolean {
 export function insertNippouCallout(content: string, draftLines: string[]): string | null {
 	if (hasNippouCallout(content)) return null;
 
-	const calloutBlock = [CALLOUT_HEADER, ...draftLines.map((l) => `> ${l}`)].join("\n");
+	const calloutBlock = [calloutHeader(), ...draftLines.map((l) => `> ${l}`)].join("\n");
 
 	const lines = content.split("\n");
 	const headingIdx = lines.findIndex((l) => l.trim() === TARGET_HEADING);

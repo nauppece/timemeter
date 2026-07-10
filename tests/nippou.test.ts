@@ -1,6 +1,11 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { setLang } from "../src/i18n";
 import { buildNippou, hasNippouCallout, insertNippouCallout } from "../src/nippou";
 import type { Session } from "../src/types";
+
+// このファイルは日本語出力（その他 / callout ヘッダー）を検証するので ja に固定する。
+beforeEach(() => setLang("ja"));
+afterEach(() => setLang("en"));
 
 const DAILY_SAMPLE = [
 	"---",
@@ -134,5 +139,14 @@ describe("insertNippouCallout", () => {
 		expect(next).toContain("- 何かやった");
 		expect(next).toContain("> [!note] タイムメーター下書き");
 		expect(next.indexOf("- 何かやった")).toBeLessThan(next.indexOf("タイムメーター下書き"));
+	});
+});
+
+describe("英語モード", () => {
+	test("その他・callout ヘッダーが英語になる", () => {
+		setLang("en");
+		expect(buildNippou([s("09:00", "09:30", "Slack", "")])).toEqual(["- Other: Slack 30m"]);
+		const next = insertNippouCallout(DAILY_SAMPLE, ["- x"]) as string;
+		expect(next).toContain("> [!note] TimeMeter draft");
 	});
 });

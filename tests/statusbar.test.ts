@@ -1,5 +1,10 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test } from "vitest";
+import { setLang } from "../src/i18n";
 import { renderStatusBarText, type StatusBarSource } from "../src/statusbar";
+
+// 文言（分・今日・待機中）を検証するので ja に固定する。
+beforeEach(() => setLang("ja"));
+afterEach(() => setLang("en"));
 
 function source(overrides: Partial<StatusBarSource>): StatusBarSource {
 	return {
@@ -31,4 +36,14 @@ test("rec 以外の状態（afk等）では待機中表示", () => {
 		source({ getState: () => "afk", getCurrentApp: () => "Code", getCurrentStart: () => 0 }),
 	);
 	expect(text).toContain("⏱ 待機中");
+});
+
+test("英語モードでは英語の文言になる", () => {
+	setLang("en");
+	const now = 1_000_000;
+	const text = renderStatusBarText(
+		source({ getCurrentApp: () => "Code", getCurrentStart: () => now - 3 * 60_000, getTodayTotalMin: () => 76 }),
+		now,
+	);
+	expect(text).toBe("⏱ Code 3min · Today 1h 16m");
 });

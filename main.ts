@@ -2,6 +2,7 @@ import { Notice, Platform, Plugin, type WorkspaceLeaf, moment } from "obsidian";
 import { aggregate, localDateStr } from "./src/aggregator";
 import { insertTimemeterBlock } from "./src/daily-embed";
 import { type EmbedHost, parseEmbedDate, renderEmbed } from "./src/embed";
+import { setLang, t } from "./src/i18n";
 import { buildNippou, insertNippouCallout } from "./src/nippou";
 import { appendManual, defaultManualStart, setNote } from "./src/quicklog";
 import { QuickLogModal } from "./src/quicklog-modal";
@@ -80,6 +81,7 @@ export default class TimeMeterPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		setLang(this.settings.lang); // 以降のコマンド名・UI 文言は設定言語で組み立てる
 		// 前回セッション中に貯まった laps のうち、当日分以外は起動時に捨てる。
 		const today0 = todayStr();
 		this.laps = this.laps.filter((l) => localDateStr(l) === today0);
@@ -108,13 +110,13 @@ export default class TimeMeterPlugin extends Plugin {
 
 		this.addSettingTab(new TimemeterSettingTab(this.app, this));
 
-		this.addRibbonIcon("hourglass", "タイムメーター", () => {
+		this.addRibbonIcon("hourglass", t("ribbon.tooltip"), () => {
 			void this.activateView();
 		});
 
 		this.addCommand({
 			id: "timemeter-open-view",
-			name: "タイムメーター: パネルを開く",
+			name: t("cmd.openView"),
 			callback: () => {
 				void this.activateView();
 			},
@@ -147,7 +149,7 @@ export default class TimeMeterPlugin extends Plugin {
 			// （非表示設定でも要素自体は残し display だけ切り替える。refreshStatusBar 参照）。
 			this.statusBarEl = this.addStatusBarItem();
 			this.statusBarEl.addClass("tm-statusbar");
-			this.statusBarEl.setAttr("aria-label", "タイムメーター: クリックでパネルを開く");
+			this.statusBarEl.setAttr("aria-label", t("statusbar.ariaOpen"));
 			this.statusBarEl.addEventListener("click", () => {
 				void this.activateView();
 			});
@@ -177,7 +179,7 @@ export default class TimeMeterPlugin extends Plugin {
 
 		this.addCommand({
 			id: "timemeter-insert-daily-embed",
-			name: "タイムメーター: デイリーに今日のタイムメーターを挿入",
+			name: t("cmd.insertDailyEmbed"),
 			callback: () => {
 				void this.insertDailyEmbed();
 			},
@@ -185,7 +187,7 @@ export default class TimeMeterPlugin extends Plugin {
 
 		this.addCommand({
 			id: "timemeter-aggregate-now",
-			name: "タイムメーター: 今すぐ集計",
+			name: t("cmd.aggregateNow"),
 			callback: () => {
 				void this.aggregateNow();
 			},
@@ -193,7 +195,7 @@ export default class TimeMeterPlugin extends Plugin {
 
 		this.addCommand({
 			id: "timemeter-insert-nippou-draft",
-			name: "タイムメーター: 日報の下書きをデイリーに挿入",
+			name: t("cmd.insertNippou"),
 			callback: () => {
 				void this.insertNippouDraft();
 			},
@@ -201,7 +203,7 @@ export default class TimeMeterPlugin extends Plugin {
 
 		this.addCommand({
 			id: "timemeter-copy-claude-prompt",
-			name: "タイムメーター: Claude 用プロンプトをコピー",
+			name: t("cmd.copyClaudePrompt"),
 			callback: () => {
 				void this.copyClaudePrompt();
 			},
@@ -210,7 +212,7 @@ export default class TimeMeterPlugin extends Plugin {
 		// クイックログ（タップ記録）: 3コマンド。
 		this.addCommand({
 			id: "timemeter-note-current",
-			name: "タイムメーター: 今のセッションにメモ",
+			name: t("cmd.noteCurrent"),
 			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "T" }],
 			// デスクトップかつ現在追跡中のアプリがある時だけコマンドパレット/ホットキーに出す。
 			checkCallback: (checking: boolean) => {
@@ -224,7 +226,7 @@ export default class TimeMeterPlugin extends Plugin {
 
 		this.addCommand({
 			id: "timemeter-manual-log",
-			name: "タイムメーター: 手動ログを追加",
+			name: t("cmd.manualLog"),
 			// モバイルでも動く（デスクトップ限定ガードを付けない）。
 			callback: () => {
 				void this.addManualLog();
@@ -233,7 +235,7 @@ export default class TimeMeterPlugin extends Plugin {
 
 		this.addCommand({
 			id: "timemeter-lap",
-			name: "タイムメーター: ラップ（ここから別作業）",
+			name: t("cmd.lap"),
 			checkCallback: (checking: boolean) => {
 				if (!Platform.isDesktopApp) return false;
 				if (!checking) {
@@ -276,23 +278,23 @@ export default class TimeMeterPlugin extends Plugin {
 		await this.aggregateNow(); // 現行セッション行を当日ファイルに実体化
 		const app = this.tracker?.currentApp;
 		if (!app) {
-			new Notice("記録中のアプリがありません");
+			new Notice(t("notice.noTrackedApp"));
 			return;
 		}
 
 		const folder = this.settings.dataFolder;
 		const today = todayStr();
 		if (!pickCurrentTarget(await readDay(this.app, folder, today), app)) {
-			new Notice("現在のセッションが見つかりません");
+			new Notice(t("notice.currentSessionNotFound"));
 			return;
 		}
 
-		new QuickLogModal(this.app, `「${app}」に一言メモ`, "何をしていますか", (text) => {
+		new QuickLogModal(this.app, t("modal.noteForApp", { app }), t("modal.whatDoing"), (text) => {
 			const trimmed = text.trim();
 			if (!trimmed) return; // 空入力はキャンセル扱い（既存 note を空で消さない）
 			void (async () => {
 				await this.setCurrentNote(trimmed);
-				new Notice("メモを記録しました");
+				new Notice(t("notice.noteSaved"));
 			})();
 		}).open();
 	}
@@ -384,7 +386,7 @@ export default class TimeMeterPlugin extends Plugin {
 		const today = todayStr();
 		const start = defaultManualStart(await readDay(this.app, folder, today), nowHmStr());
 
-		new QuickLogModal(this.app, "手動ログ：何をしていましたか", "例）ランニング", (text) => {
+		new QuickLogModal(this.app, t("modal.manualTitle"), t("modal.manualPlaceholder"), (text) => {
 			const trimmed = text.trim();
 			if (!trimmed) return; // 空入力はキャンセル扱い
 			void (async () => {
@@ -393,7 +395,7 @@ export default class TimeMeterPlugin extends Plugin {
 				const end = nowHmStr();
 				const updated = appendManual(sessions, today, start, end, trimmed);
 				await writeDay(this.app, folder, today, updated);
-				new Notice("手動ログを追加しました");
+				new Notice(t("notice.manualAdded"));
 			})();
 		}).open();
 	}
@@ -403,7 +405,7 @@ export default class TimeMeterPlugin extends Plugin {
 		this.laps.push(Date.now());
 		await this.persistLaps();
 		await this.aggregateNow();
-		new Notice("ラップしました");
+		new Notice(t("notice.lapRecorded"));
 	}
 
 	/** 右サイドバーにビューを出す（既にあれば再表示するだけ）。 */
@@ -415,6 +417,28 @@ export default class TimeMeterPlugin extends Plugin {
 			await leaf?.setViewState({ type: VIEW_TYPE_TIMEMETER, active: true });
 		}
 		if (leaf) workspace.revealLeaf(leaf);
+	}
+
+	/**
+	 * 言語変更後にパネル内 UI・ステータスバーを即時反映する（設定タブの言語ドロップダウンから呼ぶ）。
+	 * 開いている View を現在言語で作り直す。コマンド名・リボンのツールチップは Obsidian の仕様上
+	 * 登録時の言語で固定のため、次回リロードまで旧言語のまま（README に明記）。
+	 */
+	refreshLanguage(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_TIMEMETER)) {
+			const view = leaf.view;
+			if (view instanceof TimemeterView) view.rebuild();
+		}
+		this.updateStatusBarLive();
+		if (this.statusBarEl) this.statusBarEl.setAttr("aria-label", t("statusbar.ariaOpen"));
+	}
+
+	/** 開いている全ての TimemeterView を再描画する（設定からアプリ除外を変えた後などに呼ぶ）。 */
+	refreshOpenViews(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_TIMEMETER)) {
+			const view = leaf.view;
+			if (view instanceof TimemeterView) view.refreshActive();
+		}
 	}
 
 	/**
@@ -458,7 +482,7 @@ export default class TimeMeterPlugin extends Plugin {
 		const path = this.todayDailyPath();
 		const file = this.app.vault.getFileByPath(path);
 		if (!file) {
-			new Notice("今日のデイリーノートが見つかりません");
+			new Notice(t("notice.dailyNotFound"));
 			return;
 		}
 
@@ -472,7 +496,7 @@ export default class TimeMeterPlugin extends Plugin {
 			return next;
 		});
 
-		new Notice(alreadyPresent ? "タイムメーターは既に挿入されています" : "タイムメーターを挿入しました");
+		new Notice(alreadyPresent ? t("notice.embedAlready") : t("notice.embedInserted"));
 	}
 
 	/**
@@ -498,14 +522,14 @@ export default class TimeMeterPlugin extends Plugin {
 		const visible = sessions.filter((s) => !this.isHidden(s.app));
 		const draftLines = buildNippou(visible);
 		if (draftLines.length === 0) {
-			new Notice("説明のあるセッションがありません");
+			new Notice(t("notice.noDescribedSessions"));
 			return;
 		}
 
 		const path = this.todayDailyPath();
 		const file = this.app.vault.getFileByPath(path);
 		if (!file) {
-			new Notice("今日のデイリーノートが見つかりません");
+			new Notice(t("notice.dailyNotFound"));
 			return;
 		}
 
@@ -519,7 +543,7 @@ export default class TimeMeterPlugin extends Plugin {
 			return next;
 		});
 
-		new Notice(alreadyPresent ? "日報の下書きは既に挿入されています" : "日報の下書きを挿入しました");
+		new Notice(alreadyPresent ? t("notice.nippouAlready") : t("notice.nippouInserted"));
 	}
 
 	/**
@@ -529,12 +553,12 @@ export default class TimeMeterPlugin extends Plugin {
 	 */
 	async copyClaudePrompt(): Promise<void> {
 		const date = localDateStr(Date.now());
-		const prompt = `\`${this.settings.dataFolder}/${date}.md\` の説明が空のセッションについて、時間帯とアプリ・ウィンドウタイトルから内容を推測して説明列を埋めて。既にある説明は変更しないで。`;
+		const prompt = t("prompt.claude", { path: `${this.settings.dataFolder}/${date}.md` });
 		try {
 			await navigator.clipboard.writeText(prompt);
-			new Notice("コピーしました");
+			new Notice(t("notice.copied"));
 		} catch {
-			new Notice("コピーに失敗しました");
+			new Notice(t("notice.copyFailed"));
 		}
 	}
 

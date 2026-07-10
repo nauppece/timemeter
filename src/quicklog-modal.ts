@@ -3,6 +3,7 @@
 // ファイルを分けてある。テスト対象外。
 
 import { Modal, type App } from "obsidian";
+import { t } from "./i18n";
 
 /** 1行テキスト入力、Enter/ボタンで確定して onSubmit(text) */
 export class QuickLogModal extends Modal {
@@ -38,7 +39,7 @@ export class QuickLogModal extends Modal {
 		const buttonRow = contentEl.createDiv();
 		buttonRow.style.marginTop = "0.75em";
 		buttonRow.style.textAlign = "right";
-		const button = buttonRow.createEl("button", { text: "記録する" });
+		const button = buttonRow.createEl("button", { text: t("modal.save") });
 		button.addEventListener("click", () => this.submit());
 
 		window.setTimeout(() => input.focus(), 0);
