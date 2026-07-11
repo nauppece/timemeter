@@ -65,6 +65,9 @@
 }
 
 .tm-view .iconbtn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	background: none;
 	border: none;
 	color: var(--text-faint);
@@ -73,6 +76,11 @@
 	padding: 4px 6px;
 	border-radius: 6px;
 	line-height: 1;
+}
+/* Lucide 線アイコン（setIcon）を小さめ・現在色でそろえる */
+.tm-view .iconbtn .svg-icon {
+	width: 16px;
+	height: 16px;
 }
 .tm-view .iconbtn:hover {
 	background: var(--background-modifier-hover);

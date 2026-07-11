@@ -1,7 +1,7 @@
 // 右サイドバーのビュー（レイアウトA・「今日」「日別」「月」タブ本実装）。
 // UIモック（タイムメーター - UIモック.html の .ob .sb-* 一式）の見た目・挙動を踏襲する。
 
-import { type App, ItemView, Notice, type WorkspaceLeaf } from "obsidian";
+import { type App, ItemView, Notice, setIcon, type WorkspaceLeaf } from "obsidian";
 import { localDateStr } from "./aggregator";
 import { appColor } from "./appcolor";
 import { dowHeaders, hourLabel, monthTitle, t, weekdayLabel } from "./i18n";
@@ -208,10 +208,12 @@ export class TimemeterView extends ItemView {
 		pill.createSpan({ cls: "dot" });
 		this.pillLabelEl = pill.createSpan({ text: stateLabel("rec") });
 		head.createDiv({ cls: "spacer" });
-		this.pauseBtnEl = head.createEl("button", { cls: "iconbtn", text: "⏸" });
+		this.pauseBtnEl = head.createEl("button", { cls: "iconbtn" });
+		setIcon(this.pauseBtnEl, "pause");
 		this.pauseBtnEl.setAttr("aria-label", t("head.pauseResume"));
 		this.pauseBtnEl.addEventListener("click", () => this.host.togglePause());
-		const settingsBtn = head.createEl("button", { cls: "iconbtn", text: "⚙︎" });
+		const settingsBtn = head.createEl("button", { cls: "iconbtn" });
+		setIcon(settingsBtn, "settings");
 		settingsBtn.setAttr("aria-label", t("head.settings"));
 		settingsBtn.addEventListener("click", () => this.host.openSettings());
 
@@ -403,7 +405,7 @@ export class TimemeterView extends ItemView {
 		const state = this.host.getState();
 		this.contentEl.setAttr("data-state", state);
 		if (this.pillLabelEl) this.pillLabelEl.setText(stateLabel(state));
-		if (this.pauseBtnEl) this.pauseBtnEl.setText(state === "pause" ? "▶" : "⏸");
+		if (this.pauseBtnEl) setIcon(this.pauseBtnEl, state === "pause" ? "play" : "pause");
 		if (this.errbarEl) this.errbarEl.style.display = state === "err" ? "block" : "none";
 
 		const app = this.host.getCurrentApp();
