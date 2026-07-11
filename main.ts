@@ -1,6 +1,7 @@
 import { Notice, Platform, Plugin, type WorkspaceLeaf, moment } from "obsidian";
 import { aggregate, localDateStr } from "./src/aggregator";
 import { insertTimemeterBlock } from "./src/daily-embed";
+import { appendToDoneSection } from "./src/daily-log";
 import { type EmbedHost, parseEmbedDate, renderEmbed } from "./src/embed";
 import { setLang, t } from "./src/i18n";
 import { buildNippou, insertNippouCallout } from "./src/nippou";
@@ -97,6 +98,7 @@ export default class TimeMeterPlugin extends Plugin {
 			openSettings: () => plugin.openSettings(),
 			setCurrentNote: (text) => plugin.setCurrentNote(text),
 			setSegmentNote: (date, key, text) => plugin.setSegmentNote(date, key, text),
+			appendDailyDone: (date, app, text) => plugin.appendDailyDone(date, app, text),
 			isHidden: (app) => plugin.isHidden(app),
 			toggleHidden: (app) => plugin.toggleHidden(app),
 		};
@@ -491,9 +493,32 @@ export default class TimeMeterPlugin extends Plugin {
 	 * （実行時は Obsidian 本体が注入する本物の moment 関数なので問題なく呼べる）。
 	 */
 	private todayDailyPath(): string {
-		const momentFn = moment as unknown as () => import("moment").Moment;
-		const fileName = momentFn().locale("en").format("YYYY-MM-DD (ddd)");
+		return this.dailyPathForDate(todayStr());
+	}
+
+	/** "YYYY-MM-DD" から対応するデイリーノートのパス（`デイリー/YYYY-MM-DD (ddd).md`）を返す。 */
+	private dailyPathForDate(dateStr: string): string {
+		const momentFn = moment as unknown as (input?: string) => import("moment").Moment;
+		const fileName = momentFn(dateStr).locale("en").format("YYYY-MM-DD (ddd)");
 		return `${DAILY_FOLDER}/${fileName}.md`;
+	}
+
+	/**
+	 * 合計バーのクリックから、そのアプリで何をしたかをデイリーの「やったこと」へ 1 行追記する
+	 * （TimemeterHost.appendDailyDone の実体）。対象日は表示中の日付。行は `- {app}: {内容}`。
+	 * デイリーノートが無い場合・空入力は何もしない（Notice のみ）。
+	 */
+	async appendDailyDone(date: string, app: string, text: string): Promise<void> {
+		const trimmed = text.trim();
+		if (!trimmed) return;
+		const file = this.app.vault.getFileByPath(this.dailyPathForDate(date));
+		if (!file) {
+			new Notice(t("notice.dailyNotFound"));
+			return;
+		}
+		const line = `- ${app}: ${trimmed}`;
+		await this.app.vault.process(file, (content) => appendToDoneSection(content, line));
+		new Notice(t("notice.dailyAppended"));
 	}
 
 	/**

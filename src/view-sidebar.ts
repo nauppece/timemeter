@@ -33,6 +33,7 @@ export interface TimemeterHost {
 	openSettings(): void;
 	setCurrentNote(text: string): Promise<void>;
 	setSegmentNote(date: string, key: string, text: string): Promise<void>;
+	appendDailyDone(date: string, app: string, text: string): Promise<void>;
 	isHidden(app: string): boolean;
 	toggleHidden(app: string): void;
 }
@@ -447,7 +448,7 @@ export class TimemeterView extends ItemView {
 		this.liveSessionKey = app ? this.pickLatestKey(sessions, app) : null;
 
 		this.updateTodayTotal(sessions);
-		this.renderBars(this.barsEl, sessions, t("bars.emptyToday"));
+		this.renderBars(this.barsEl, sessions, t("bars.emptyToday"), this.currentDate);
 		this.renderLanes(this.lanesEl, sessions, {
 			date: this.currentDate,
 			liveKey: this.liveSessionKey,
@@ -504,7 +505,7 @@ export class TimemeterView extends ItemView {
 		const app = this.host.getCurrentApp();
 		const liveKey = this.dayViewDate === todayStr && app ? this.pickLatestKey(sessions, app) : null;
 
-		this.renderBars(this.dayBarsEl, sessions, t("bars.emptyDay"));
+		this.renderBars(this.dayBarsEl, sessions, t("bars.emptyDay"), this.dayViewDate);
 		this.renderLanes(this.dayLanesEl, sessions, {
 			date: this.dayViewDate,
 			liveKey,
@@ -617,8 +618,14 @@ export class TimemeterView extends ItemView {
 	}
 
 	/** アプリ別合計バー。除外（hidden）アプリは行ごと描画しない（時系列・合計から完全に消す）。
-	 *  ⋯/右クリックでコンテキストメニュー。今日/日別タブ共通で使う（container を呼び出し側から渡す）。 */
-	private renderBars(bars: HTMLElement | null, sessions: Session[], emptyMessage = t("bars.emptyToday")): void {
+	 *  行クリックで「デイリーに追記」モーダル、⋯/右クリックでコンテキストメニュー。
+	 *  今日/日別タブ共通で使う（container・追記先の date を呼び出し側から渡す）。 */
+	private renderBars(
+		bars: HTMLElement | null,
+		sessions: Session[],
+		emptyMessage = t("bars.emptyToday"),
+		date = "",
+	): void {
 		if (!bars) return;
 		bars.empty();
 
@@ -636,7 +643,11 @@ export class TimemeterView extends ItemView {
 		const visMax = sorted[0][1]; // 降順なので先頭が最大
 
 		for (const [app, min] of sorted) {
-			const row = bars.createDiv({ cls: "bar-row" });
+			const row = bars.createDiv({ cls: "bar-row clickable" });
+			if (date) {
+				row.setAttr("title", t("bars.addToDaily"));
+				row.addEventListener("click", () => this.openDailyAdd(app, date));
+			}
 			row.createSpan({ cls: "nm", text: app });
 			const track = row.createDiv({ cls: "track" });
 			const fill = track.createDiv({ cls: "fill" });
@@ -859,6 +870,21 @@ export class TimemeterView extends ItemView {
 		const y = Math.max(4, Math.min(ev.clientY - rootR.top, rootR.height - 140));
 		ctx.style.left = `${x}px`;
 		ctx.style.top = `${y}px`;
+	}
+
+	/** 合計バーのクリックから、そのアプリで何をしたかをデイリーの「やったこと」に追記するモーダルを開く。 */
+	private openDailyAdd(app: string, date: string): void {
+		new QuickLogModal(
+			this.host.app,
+			t("modal.dailyTitle", { app }),
+			t("modal.dailyPlaceholder"),
+			(text) => {
+				const trimmed = text.trim();
+				if (!trimmed) return; // 空入力はキャンセル扱い
+				void this.host.appendDailyDone(date, app, trimmed);
+			},
+			t("modal.add"),
+		).open();
 	}
 
 	/** note が空のセグメントをクリックしたときの簡易入力（QuickLogModal 流用）。今日/日別タブ共通。 */

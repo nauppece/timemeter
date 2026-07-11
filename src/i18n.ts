@@ -47,6 +47,7 @@ const EN: Dict = {
 	"notice.nippouInserted": "Daily-report draft inserted",
 	"notice.copied": "Copied",
 	"notice.copyFailed": "Copy failed",
+	"notice.dailyAppended": "Added to the daily note",
 	"modal.noteForApp": 'Note for "{app}"',
 	"modal.whatDoing": "What are you doing?",
 	"modal.whatWereDoing": "What were you doing?",
@@ -54,6 +55,9 @@ const EN: Dict = {
 	"modal.manualPlaceholder": "e.g. Running",
 	"modal.fillInTitle": "Add a note for {label}",
 	"modal.save": "Save",
+	"modal.add": "Add",
+	"modal.dailyTitle": 'What were you doing in "{app}"?',
+	"modal.dailyPlaceholder": "e.g. Researched the article",
 	"prompt.claude":
 		"For sessions with an empty description in `{path}`, infer the activity from the time range, app, and window title, and fill in the description column. Do not change descriptions that already exist.",
 
@@ -101,6 +105,7 @@ const EN: Dict = {
 	"bars.emptyToday": "No records yet",
 	"bars.emptyDay": "No records for this day",
 	"bars.more": "Quick actions",
+	"bars.addToDaily": "Click to add to the daily note",
 
 	// コンテキストメニュー
 	"ctx.hide": 'Hide "{app}"',
@@ -181,6 +186,7 @@ const JA: Dict = {
 	"notice.nippouInserted": "日報の下書きを挿入しました",
 	"notice.copied": "コピーしました",
 	"notice.copyFailed": "コピーに失敗しました",
+	"notice.dailyAppended": "デイリーに追加しました",
 	"modal.noteForApp": "「{app}」に一言メモ",
 	"modal.whatDoing": "何をしていますか",
 	"modal.whatWereDoing": "何をしていましたか",
@@ -188,6 +194,9 @@ const JA: Dict = {
 	"modal.manualPlaceholder": "例）ランニング",
 	"modal.fillInTitle": "{label} の説明を追記",
 	"modal.save": "記録する",
+	"modal.add": "追加",
+	"modal.dailyTitle": "「{app}」で何をしていた？",
+	"modal.dailyPlaceholder": "例）記事のリサーチ",
 	"prompt.claude":
 		"`{path}` の説明が空のセッションについて、時間帯とアプリ・ウィンドウタイトルから内容を推測して説明列を埋めて。既にある説明は変更しないで。",
 
@@ -229,6 +238,7 @@ const JA: Dict = {
 	"bars.emptyToday": "まだ記録がありません",
 	"bars.emptyDay": "この日の記録はありません",
 	"bars.more": "クイック操作",
+	"bars.addToDaily": "クリックでデイリーに追記",
 
 	"ctx.hide": "「{app}」を非表示にする",
 	"ctx.show": "「{app}」を再表示する",

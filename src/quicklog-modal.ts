@@ -10,14 +10,22 @@ export class QuickLogModal extends Modal {
 	private readonly promptText: string;
 	private readonly placeholder: string;
 	private readonly onSubmit: (text: string) => void;
+	private readonly submitLabel: string;
 	private inputEl: HTMLInputElement | null = null;
 	private submitted = false;
 
-	constructor(app: App, promptText: string, placeholder: string, onSubmit: (text: string) => void) {
+	constructor(
+		app: App,
+		promptText: string,
+		placeholder: string,
+		onSubmit: (text: string) => void,
+		submitLabel: string = t("modal.save"),
+	) {
 		super(app);
 		this.promptText = promptText;
 		this.placeholder = placeholder;
 		this.onSubmit = onSubmit;
+		this.submitLabel = submitLabel;
 	}
 
 	onOpen(): void {
@@ -39,7 +47,7 @@ export class QuickLogModal extends Modal {
 		const buttonRow = contentEl.createDiv();
 		buttonRow.style.marginTop = "0.75em";
 		buttonRow.style.textAlign = "right";
-		const button = buttonRow.createEl("button", { text: t("modal.save") });
+		const button = buttonRow.createEl("button", { text: this.submitLabel });
 		button.addEventListener("click", () => this.submit());
 
 		window.setTimeout(() => input.focus(), 0);

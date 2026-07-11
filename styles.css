@@ -327,6 +327,9 @@
 	border-radius: 7px;
 	position: relative;
 }
+.tm-view .bar-row.clickable {
+	cursor: pointer;
+}
 .tm-view .bar-row:hover {
 	background: var(--background-modifier-hover);
 }
