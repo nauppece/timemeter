@@ -150,31 +150,22 @@ export class TimemeterSettingTab extends PluginSettingTab {
 		for (const name of normal) this.renderAppRule(containerEl, name);
 	}
 
-	/** 1 アプリ分のルール行（表示/除外トグル・タイトル取込トグル）を描く。 */
+	/** 1 アプリ分のルール行。表示/除外を目のアイコン（eye / eye-off）1つで切り替える。 */
 	private renderAppRule(containerEl: HTMLElement, name: string): void {
 		const plugin = this.plugin;
 		const rule = plugin.settings.apps[name];
-		new Setting(containerEl)
-			.setName(name)
-			.addToggle((toggle) =>
-				toggle
-					.setTooltip(t("set.apps.visibleTooltip"))
-					.setValue(!rule.hidden)
-					.onChange(async (value) => {
-						rule.hidden = !value;
-						await plugin.saveSettings();
-						plugin.refreshOpenViews();
-						this.display(); // 除外グループの並びを更新するため描き直す
-					}),
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setTooltip(t("set.apps.captureTooltip"))
-					.setValue(rule.captureTitle)
-					.onChange(async (value) => {
-						rule.captureTitle = value;
-						await plugin.saveSettings();
-					}),
-			);
+		const setting = new Setting(containerEl).setName(name);
+		if (rule.hidden) setting.setClass("tm-app-excluded");
+		setting.addExtraButton((btn) =>
+			btn
+				.setIcon(rule.hidden ? "eye-off" : "eye")
+				.setTooltip(rule.hidden ? t("set.apps.excludedTip") : t("set.apps.shownTip"))
+				.onClick(async () => {
+					rule.hidden = !rule.hidden;
+					await plugin.saveSettings();
+					plugin.refreshOpenViews();
+					this.display(); // 除外グループの並び・アイコン状態を更新するため描き直す
+				}),
+		);
 	}
 }

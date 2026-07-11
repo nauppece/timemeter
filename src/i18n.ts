@@ -16,8 +16,8 @@ const EN: Dict = {
 
 	// ステータスバー
 	"statusbar.waiting": "Waiting",
-	"statusbar.recording": "⏱ {app} {n}min · Today {total}",
-	"statusbar.idle": "⏱ {label} · Today {total}",
+	"statusbar.recording": "{app} {n}min · Today {total}",
+	"statusbar.idle": "{label} · Today {total}",
 	"statusbar.ariaOpen": "TimeMeter: click to open panel",
 
 	// リボン
@@ -66,15 +66,15 @@ const EN: Dict = {
 	// ヘッダー
 	"head.pauseResume": "Pause / resume",
 	"head.settings": "Settings",
-	"err.noPermission": "⚠️ Automation permission not granted — cannot record.",
+	"err.noPermission": "Automation permission not granted — cannot record.",
 	"err.howToSetUp": "See how to set up",
 
 	// ライブブロック
 	"live.now": "NOW",
 	"live.min": "min",
 	"live.secSuffix": "s",
-	"live.idle": "💤 Idle — recording paused",
-	"live.paused": "⏸ Paused — not recording until resumed",
+	"live.idle": "Idle — recording paused",
+	"live.paused": "Paused — not recording until resumed",
 	"live.todayTotal": "Today total",
 	"live.quickPlaceholder": "What are you doing? Enter to log",
 	"live.quickDisabled": "No app being tracked",
@@ -86,7 +86,7 @@ const EN: Dict = {
 	"tab.day": "Day",
 	"tab.month": "Month",
 	"day.totalPrefix": "Total ",
-	"tl.caption": "Hover for details / click to add a note (📝 = has note)",
+	"tl.caption": "Hover for details / click to add a note (underline = has note)",
 
 	// 時系列（レーン）
 	"lanes.emptyToday": "No records yet",
@@ -103,11 +103,9 @@ const EN: Dict = {
 	"bars.more": "Quick actions",
 
 	// コンテキストメニュー
-	"ctx.hide": '👁 Hide "{app}"',
-	"ctx.show": '👁 Show "{app}" again',
-	"ctx.captureOff": "🏷 Turn title capture OFF",
-	"ctx.captureOn": "🏷 Turn title capture ON",
-	"ctx.manageInSettings": "⚙︎ Manage all in settings…",
+	"ctx.hide": 'Hide "{app}"',
+	"ctx.show": 'Show "{app}" again',
+	"ctx.manageInSettings": "Manage all in settings…",
 
 	// ツールチップ・バッジ
 	"tip.recording": " (recording)",
@@ -137,11 +135,11 @@ const EN: Dict = {
 	"set.lang.name": "Language",
 	"set.lang.desc": "Display language for the panel, notices, and settings (command names apply after the next reload)",
 	"set.apps.heading": "Per-app rules",
-	"set.apps.desc": "Configure visibility and title capture for each detected app. Turning off Visible excludes the app from the timeline and totals (records are kept).",
+	"set.apps.desc": "Show or exclude each detected app. Excluding an app removes it from the timeline and totals (records are kept).",
 	"set.apps.none": "No apps observed yet.",
 	"set.apps.excludedGroup": "Excluded (hidden from timeline & totals)",
-	"set.apps.visibleTooltip": "Visible (off = exclude from timeline & totals)",
-	"set.apps.captureTooltip": "Capture title",
+	"set.apps.shownTip": "Shown — click to exclude",
+	"set.apps.excludedTip": "Excluded — click to show",
 
 	// 埋め込み・日報
 	"embed.header": "TimeMeter",
@@ -155,8 +153,8 @@ const JA: Dict = {
 	"common.noRecords": "記録なし",
 
 	"statusbar.waiting": "待機中",
-	"statusbar.recording": "⏱ {app} {n}分 ・ 今日 {total}",
-	"statusbar.idle": "⏱ {label} ・ 今日 {total}",
+	"statusbar.recording": "{app} {n}分 ・ 今日 {total}",
+	"statusbar.idle": "{label} ・ 今日 {total}",
 	"statusbar.ariaOpen": "タイムメーター: クリックでパネルを開く",
 
 	"ribbon.tooltip": "タイムメーター",
@@ -200,14 +198,14 @@ const JA: Dict = {
 
 	"head.pauseResume": "一時停止/再開",
 	"head.settings": "設定",
-	"err.noPermission": "⚠️ オートメーション権限が未許可のため記録できません。",
+	"err.noPermission": "オートメーション権限が未許可のため記録できません。",
 	"err.howToSetUp": "設定方法を見る",
 
 	"live.now": "NOW",
 	"live.min": "分",
 	"live.secSuffix": "秒",
-	"live.idle": "💤 無操作 — 記録を停止中",
-	"live.paused": "⏸ 一時停止中 — 再開までは記録しません",
+	"live.idle": "無操作 — 記録を停止中",
+	"live.paused": "一時停止中 — 再開までは記録しません",
 	"live.todayTotal": "今日合計",
 	"live.quickPlaceholder": "いま何してる？ Enterで記録",
 	"live.quickDisabled": "記録中のアプリがありません",
@@ -218,7 +216,7 @@ const JA: Dict = {
 	"tab.day": "日別",
 	"tab.month": "月",
 	"day.totalPrefix": "合計 ",
-	"tl.caption": "ホバーで詳細 / クリックで説明を追記（📝＝説明あり）",
+	"tl.caption": "ホバーで詳細 / クリックで説明を追記（下線＝説明あり）",
 
 	"lanes.emptyToday": "まだ記録がありません",
 	"lanes.emptyDay": "この日の記録はありません",
@@ -232,11 +230,9 @@ const JA: Dict = {
 	"bars.emptyDay": "この日の記録はありません",
 	"bars.more": "クイック操作",
 
-	"ctx.hide": "👁 「{app}」を非表示にする",
-	"ctx.show": "👁 「{app}」を再表示する",
-	"ctx.captureOff": "🏷 タイトル取込を OFF にする",
-	"ctx.captureOn": "🏷 タイトル取込を ON にする",
-	"ctx.manageInSettings": "⚙︎ 設定でまとめて管理…",
+	"ctx.hide": "「{app}」を非表示にする",
+	"ctx.show": "「{app}」を再表示する",
+	"ctx.manageInSettings": "設定でまとめて管理…",
 
 	"tip.recording": "（記録中）",
 	"tip.now": "現在",
@@ -263,11 +259,11 @@ const JA: Dict = {
 	"set.lang.name": "言語",
 	"set.lang.desc": "パネル・通知・設定の表示言語（コマンド名は次回リロードで反映）",
 	"set.apps.heading": "アプリ別ルール",
-	"set.apps.desc": "自動検知されたアプリごとに、表示可否とタイトル取込を設定できます。「表示」を OFF にすると時系列・合計から除外されます（記録は残ります）。",
+	"set.apps.desc": "自動検知されたアプリごとに表示するか除外するかを切り替えます。除外すると時系列・合計から消えます（記録は残ります）。",
 	"set.apps.none": "まだ観測されたアプリはありません。",
 	"set.apps.excludedGroup": "除外中（時系列・合計から非表示）",
-	"set.apps.visibleTooltip": "表示（OFF で時系列・合計から除外）",
-	"set.apps.captureTooltip": "タイトル取込",
+	"set.apps.shownTip": "表示中 — クリックで除外",
+	"set.apps.excludedTip": "除外中 — クリックで表示",
 
 	"embed.header": "タイムメーター",
 	"nippou.calloutHeader": "> [!note] タイムメーター下書き",

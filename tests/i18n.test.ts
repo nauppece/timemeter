@@ -23,7 +23,7 @@ describe("t()", () => {
 	test("{name} プレースホルダを置換する", () => {
 		setLang("en");
 		expect(t("badge.left", { n: 3 })).toBe("3 left");
-		expect(t("ctx.hide", { app: "LINE" })).toBe('👁 Hide "LINE"');
+		expect(t("ctx.hide", { app: "LINE" })).toBe('Hide "LINE"');
 	});
 
 	test("params に無いプレースホルダはそのまま残す", () => {

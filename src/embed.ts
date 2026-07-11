@@ -44,7 +44,7 @@ export async function renderEmbed(el: HTMLElement, host: EmbedHost, dateStr: str
 
 	const head = el.createDiv({ cls: "embed-head" });
 	const totalMin = visible.reduce((sum, s) => sum + durMin(s), 0);
-	head.createEl("b", { text: `⏱️ ${t("embed.header")} ${fmtDur(totalMin)}` });
+	head.createEl("b", { text: `${t("embed.header")} ${fmtDur(totalMin)}` });
 	head.createSpan({ text: dateStr });
 
 	if (visible.length === 0) {

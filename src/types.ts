@@ -22,7 +22,6 @@ export interface Session {
 
 export interface AppRule {
 	hidden: boolean;
-	captureTitle: boolean;
 }
 
 export interface TimemeterSettings {

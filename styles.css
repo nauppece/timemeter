@@ -104,6 +104,15 @@
 	line-height: 1.5;
 	flex: 0 0 auto;
 }
+.tm-view .errbar .err-ic {
+	display: inline-flex;
+	vertical-align: -3px;
+	color: var(--st-err);
+}
+.tm-view .errbar .err-ic .svg-icon {
+	width: 15px;
+	height: 15px;
+}
 .tm-view .errbar a {
 	color: var(--st-err);
 	font-weight: 600;
@@ -345,15 +354,21 @@
 	font-variant-numeric: tabular-nums;
 }
 .tm-view .bar-row .more {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	background: none;
 	border: none;
 	color: var(--text-faint);
 	cursor: pointer;
-	font-size: 13px;
 	padding: 0 2px;
 	border-radius: 4px;
 	visibility: hidden;
 	line-height: 1;
+}
+.tm-view .bar-row .more .svg-icon {
+	width: 15px;
+	height: 15px;
 }
 .tm-view .bar-row:hover .more,
 .tm-view .bar-row .more:focus-visible {
@@ -404,6 +419,20 @@
 }
 .tm-view .ctxmenu button:hover {
 	background: var(--background-modifier-hover);
+}
+.tm-view .ctxmenu .ctxitem {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.tm-view .ctxmenu .ctx-ic {
+	display: inline-flex;
+	color: var(--text-muted);
+	flex: none;
+}
+.tm-view .ctxmenu .ctx-ic .svg-icon {
+	width: 15px;
+	height: 15px;
 }
 .tm-view .ctxmenu .sep {
 	border-top: 1px solid var(--background-modifier-border);
@@ -834,4 +863,9 @@
 	margin-top: 10px;
 	font-weight: 600;
 	color: var(--text-muted);
+}
+/* 除外中アプリの行は名前を淡色＋取り消し線にして状態を伝える */
+.tm-app-excluded .setting-item-name {
+	color: var(--text-faint);
+	text-decoration: line-through;
 }

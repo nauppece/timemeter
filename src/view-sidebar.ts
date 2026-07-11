@@ -35,8 +35,6 @@ export interface TimemeterHost {
 	setSegmentNote(date: string, key: string, text: string): Promise<void>;
 	isHidden(app: string): boolean;
 	toggleHidden(app: string): void;
-	getCaptureTitle(app: string): boolean;
-	toggleCaptureTitle(app: string): void;
 }
 
 /** 状態ラベルを現在言語で返す。 */
@@ -141,7 +139,8 @@ export class TimemeterView extends ItemView {
 	// ── コンテキストメニュー・ツールチップ
 	private ctxmenuEl: HTMLElement | null = null;
 	private ctxHideBtn: HTMLButtonElement | null = null;
-	private ctxCaptureBtn: HTMLButtonElement | null = null;
+	private ctxHideIconEl: HTMLElement | null = null;
+	private ctxHideLabelEl: HTMLElement | null = null;
 	private ctxSettingsBtn: HTMLButtonElement | null = null;
 	private ctxApp: string | null = null;
 	private tipEl: HTMLElement | null = null;
@@ -219,7 +218,8 @@ export class TimemeterView extends ItemView {
 
 		// ── errbar: 権限エラー時のみ表示
 		this.errbarEl = root.createDiv({ cls: "errbar" });
-		this.errbarEl.appendText(t("err.noPermission"));
+		setIcon(this.errbarEl.createSpan({ cls: "err-ic" }), "alert-triangle");
+		this.errbarEl.appendText(` ${t("err.noPermission")} `);
 		const errLink = this.errbarEl.createEl("a", { text: t("err.howToSetUp") });
 		errLink.addEventListener("click", () => this.host.openSettings());
 		this.errbarEl.style.display = "none";
@@ -247,17 +247,15 @@ export class TimemeterView extends ItemView {
 
 		// ── コンテキストメニュー・ツールチップ（root 直下に置き、絶対配置の基準を root にする）
 		this.ctxmenuEl = root.createDiv({ cls: "ctxmenu" });
-		this.ctxHideBtn = this.ctxmenuEl.createEl("button");
-		this.ctxCaptureBtn = this.ctxmenuEl.createEl("button", { text: t("ctx.captureOff") });
+		this.ctxHideBtn = this.ctxmenuEl.createEl("button", { cls: "ctxitem" });
+		this.ctxHideIconEl = this.ctxHideBtn.createSpan({ cls: "ctx-ic" });
+		this.ctxHideLabelEl = this.ctxHideBtn.createSpan();
 		this.ctxmenuEl.createDiv({ cls: "sep" });
-		this.ctxSettingsBtn = this.ctxmenuEl.createEl("button", { text: t("ctx.manageInSettings") });
+		this.ctxSettingsBtn = this.ctxmenuEl.createEl("button", { cls: "ctxitem" });
+		setIcon(this.ctxSettingsBtn.createSpan({ cls: "ctx-ic" }), "settings");
+		this.ctxSettingsBtn.createSpan({ text: t("ctx.manageInSettings") });
 		this.ctxHideBtn.addEventListener("click", () => {
 			if (this.ctxApp) this.host.toggleHidden(this.ctxApp);
-			this.ctxmenuEl?.removeClass("open");
-			this.refreshActive();
-		});
-		this.ctxCaptureBtn.addEventListener("click", () => {
-			if (this.ctxApp) this.host.toggleCaptureTitle(this.ctxApp);
 			this.ctxmenuEl?.removeClass("open");
 			this.refreshActive();
 		});
@@ -645,7 +643,8 @@ export class TimemeterView extends ItemView {
 			fill.style.width = `${visMax > 0 ? Math.max(3, (min / visMax) * 100) : 0}%`;
 			fill.style.background = appColor(app);
 			row.createSpan({ cls: "dur", text: fmtDur(min) });
-			const more = row.createEl("button", { cls: "more", text: "⋯" });
+			const more = row.createEl("button", { cls: "more" });
+			setIcon(more, "more-horizontal");
 			more.setAttr("title", t("bars.more"));
 			more.addEventListener("click", (ev) => {
 				ev.stopPropagation();
@@ -852,9 +851,8 @@ export class TimemeterView extends ItemView {
 		if (!ctx) return;
 		this.ctxApp = app;
 		const hidden = this.host.isHidden(app);
-		this.ctxHideBtn?.setText(hidden ? t("ctx.show", { app }) : t("ctx.hide", { app }));
-		const capture = this.host.getCaptureTitle(app);
-		this.ctxCaptureBtn?.setText(capture ? t("ctx.captureOff") : t("ctx.captureOn"));
+		if (this.ctxHideIconEl) setIcon(this.ctxHideIconEl, hidden ? "eye" : "eye-off");
+		this.ctxHideLabelEl?.setText(hidden ? t("ctx.show", { app }) : t("ctx.hide", { app }));
 		ctx.addClass("open");
 		const rootR = root.getBoundingClientRect();
 		const x = Math.max(4, Math.min(ev.clientX - rootR.left, rootR.width - 210));

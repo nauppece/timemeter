@@ -64,18 +64,14 @@ export default class TimeMeterPlugin extends Plugin {
 
 	/**
 	 * poll 経路の共通ハンドラ（onload / restartTracker で共有し、ロジックの重複を避ける）。
-	 * 未知アプリは既定ルール（表示・タイトル取込あり）で自動登録し、captureTitle が
-	 * 無効なアプリはタイトルを vault に残さないよう poll の時点で落とす。
-	 * hidden はここでは使わない（poll は常にバッファする。表示側の反映は別タスク）。
+	 * 未知アプリは既定ルール（表示）で自動登録する。hidden はここでは使わない
+	 * （poll は常にバッファする。表示側の反映は別タスク）。
 	 */
 	private handlePoll = (p: Poll) => {
-		let rule = this.settings.apps[p.app];
-		if (!rule) {
-			rule = { hidden: false, captureTitle: true };
-			this.settings.apps[p.app] = rule;
+		if (!this.settings.apps[p.app]) {
+			this.settings.apps[p.app] = { hidden: false };
 			void this.saveSettings();
 		}
-		if (!rule.captureTitle) p.title = null;
 		this.polls.push(p);
 	};
 
@@ -103,8 +99,6 @@ export default class TimeMeterPlugin extends Plugin {
 			setSegmentNote: (date, key, text) => plugin.setSegmentNote(date, key, text),
 			isHidden: (app) => plugin.isHidden(app),
 			toggleHidden: (app) => plugin.toggleHidden(app),
-			getCaptureTitle: (app) => plugin.getCaptureTitle(app),
-			toggleCaptureTitle: (app) => plugin.toggleCaptureTitle(app),
 		};
 		this.registerView(VIEW_TYPE_TIMEMETER, (leaf) => new TimemeterView(leaf, host));
 
@@ -356,7 +350,7 @@ export default class TimeMeterPlugin extends Plugin {
 	private appRule(app: string): AppRule {
 		let rule = this.settings.apps[app];
 		if (!rule) {
-			rule = { hidden: false, captureTitle: true };
+			rule = { hidden: false };
 			this.settings.apps[app] = rule;
 		}
 		return rule;
@@ -369,16 +363,6 @@ export default class TimeMeterPlugin extends Plugin {
 	toggleHidden(app: string): void {
 		const rule = this.appRule(app);
 		rule.hidden = !rule.hidden;
-		void this.saveSettings();
-	}
-
-	getCaptureTitle(app: string): boolean {
-		return this.settings.apps[app]?.captureTitle ?? true;
-	}
-
-	toggleCaptureTitle(app: string): void {
-		const rule = this.appRule(app);
-		rule.captureTitle = !rule.captureTitle;
 		void this.saveSettings();
 	}
 
