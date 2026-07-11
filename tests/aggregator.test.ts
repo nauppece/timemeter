@@ -39,3 +39,34 @@ test("titleは最頻出の非null値", () => {
 	const s = aggregate([p("09:00", "Code", 0, "a.ts"), p("09:01", "Code", 0, "b.ts"), p("09:02", "Code", 0, "b.ts")], OPT);
 	expect(s[0].title).toBe("b.ts");
 });
+
+// ── 同時起動アプリの並行トラッキング（1tickで複数アプリの poll が来るケース） ──
+
+test("同時刻に複数アプリの poll が来ると、アプリごとに重なるセッションになる", () => {
+	const s = aggregate(
+		[
+			p("09:00", "Code"), p("09:00", "Chrome"),
+			p("09:01", "Code"), p("09:01", "Chrome"),
+			p("09:02", "Code"), p("09:02", "Chrome"),
+		],
+		OPT,
+	);
+	// Code / Chrome がそれぞれ 09:00–09:02 の1セッションになる（時間帯が重なる）。
+	expect(s).toHaveLength(2);
+	expect(s).toContainEqual(expect.objectContaining({ app: "Code", start: "09:00", end: "09:02" }));
+	expect(s).toContainEqual(expect.objectContaining({ app: "Chrome", start: "09:00", end: "09:02" }));
+});
+
+test("別アプリを挟んでも同一アプリの poll はアプリ単位で結合される", () => {
+	// グローバルな時刻順では Code, Chrome, Code と交互だが、アプリ別に見れば Code は連続。
+	const s = aggregate([p("09:00", "Code"), p("09:00", "Chrome"), p("09:01", "Code")], OPT);
+	const code = s.find((x) => x.app === "Code");
+	expect(code).toMatchObject({ start: "09:00", end: "09:01" });
+	expect(s.filter((x) => x.app === "Code")).toHaveLength(1);
+});
+
+test("出力は start→app の順に安定ソートされる", () => {
+	const s = aggregate([p("09:00", "Code"), p("09:00", "Chrome")], OPT);
+	// 同じ start(09:00) では app 名順（Chrome < Code）。
+	expect(s.map((x) => x.app)).toEqual(["Chrome", "Code"]);
+});

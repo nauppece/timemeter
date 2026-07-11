@@ -125,6 +125,9 @@ const EN: Dict = {
 	"set.afk.desc": "Treat as away (AFK) after this many seconds of no input",
 	"set.merge.name": "Merge gap (min)",
 	"set.merge.desc": "Merge into one session if the same app resumes within this many minutes",
+	"set.captureAll.name": "Track all open apps",
+	"set.captureAll.desc":
+		"At each poll, record every app with a window open on the desktop, not only the frontmost one — so concurrent work is captured. Totals can exceed real time; exclude apps you don't care about in the per-app rules below. Off = frontmost app only.",
 	"set.folder.name": "Data folder",
 	"set.folder.desc": "Folder name where record Markdown files are stored",
 	"set.statusbar.name": "Show status bar",
@@ -248,6 +251,9 @@ const JA: Dict = {
 	"set.afk.desc": "この秒数以上操作が無いと離席（AFK）とみなす",
 	"set.merge.name": "結合ギャップ（分）",
 	"set.merge.desc": "同じアプリの記録がこの分数以内に再開したら1つのセッションにまとめる",
+	"set.captureAll.name": "開いている全アプリを記録",
+	"set.captureAll.desc":
+		"毎ポーリング、最前面だけでなくデスクトップにウィンドウを開いている全アプリを記録します（同時作業も残せます）。合計は実時間を超えることがあります。不要なアプリは下の「アプリ別ルール」で除外してください。OFF で最前面のみ。",
 	"set.folder.name": "データフォルダ",
 	"set.folder.desc": "記録先の Markdown ファイルを置くフォルダ名",
 	"set.statusbar.name": "ステータスバー表示",

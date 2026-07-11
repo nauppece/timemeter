@@ -35,6 +35,27 @@ export async function getFrontmostApp(): Promise<string | null> {
 	}
 }
 
+/**
+ * デスクトップに開いている（隠していない＝visible）アプリ名の一覧を取得する。
+ * 「同時起動アプリの並行トラッキング」で使う。失敗時（権限未許可等）は空配列。
+ * osascript は名前をカンマ区切り（"Code, Terminal, Finder"）で返すので分割する。
+ */
+export async function getVisibleApps(): Promise<string[]> {
+	if (!Platform.isDesktopApp) return [];
+	try {
+		const out = await execFileAsync("osascript", [
+			"-e",
+			"tell application \"System Events\" to get name of every process whose visible is true",
+		]);
+		return out
+			.split(",")
+			.map((s) => s.trim())
+			.filter((s) => s.length > 0);
+	} catch {
+		return [];
+	}
+}
+
 /** 最前面ウィンドウのタイトルを取得する（ベストエフォート）。失敗時（-1719 含む）は null */
 export async function getWindowTitle(): Promise<string | null> {
 	if (!Platform.isDesktopApp) return null;

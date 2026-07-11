@@ -82,6 +82,17 @@ export class TimemeterSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName(t("set.captureAll.name"))
+			.setDesc(t("set.captureAll.desc"))
+			.addToggle((toggle) =>
+				toggle.setValue(plugin.settings.captureAllApps).onChange(async (value) => {
+					plugin.settings.captureAllApps = value;
+					await plugin.saveSettings();
+					plugin.restartTracker();
+				}),
+			);
+
+		new Setting(containerEl)
 			.setName(t("set.folder.name"))
 			.setDesc(t("set.folder.desc"))
 			.addText((text) =>

@@ -57,20 +57,16 @@ function buildSession(group: Poll[], endsOnDayBoundary: boolean): Session {
 	};
 }
 
-export function aggregate(polls: Poll[], opts: AggregateOptions): Session[] {
-	// ① AFK poll を除外
-	const kept = polls
-		.filter((p) => p.idleSec < opts.afkSec)
-		.slice()
-		.sort((a, b) => a.ts - b.ts);
-
+/**
+ * 単一アプリの poll 列（時刻昇順）を、日跨ぎ・gap・ラップで区切ってセッション化し out に積む。
+ * 同時起動アプリの並行トラッキングでは、アプリごとにこの関数を呼ぶ（アプリ間で時間帯が重なる）。
+ */
+function groupAppPolls(polls: Poll[], opts: AggregateOptions, out: Session[]): void {
 	const gapMs = opts.gapMin * 60 * 1000;
 	const laps = opts.laps;
-
-	const sessions: Session[] = [];
 	let group: Poll[] = [];
 
-	for (const poll of kept) {
+	for (const poll of polls) {
 		if (group.length === 0) {
 			group.push(poll);
 			continue;
@@ -78,20 +74,49 @@ export function aggregate(polls: Poll[], opts: AggregateOptions): Session[] {
 		const prev = group[group.length - 1];
 
 		const dayChanged = localDateStr(prev.ts) !== localDateStr(poll.ts);
-		const appChanged = prev.app !== poll.app;
 		const gapExceeded = poll.ts - prev.ts > gapMs;
 		const lapBetween = laps.some((l) => l > prev.ts && l <= poll.ts);
 
-		if (dayChanged || appChanged || gapExceeded || lapBetween) {
-			sessions.push(buildSession(group, dayChanged));
+		if (dayChanged || gapExceeded || lapBetween) {
+			out.push(buildSession(group, dayChanged));
 			group = [poll];
 		} else {
 			group.push(poll);
 		}
 	}
 	if (group.length > 0) {
-		sessions.push(buildSession(group, false));
+		out.push(buildSession(group, false));
+	}
+}
+
+export function aggregate(polls: Poll[], opts: AggregateOptions): Session[] {
+	// ① AFK poll を除外し、時刻昇順に。
+	const kept = polls
+		.filter((p) => p.idleSec < opts.afkSec)
+		.slice()
+		.sort((a, b) => a.ts - b.ts);
+
+	// ② アプリ別に分割してからセッション化する。
+	//    同時刻に複数アプリの poll が来る（並行トラッキング）ため、時刻順の1本のストリームで
+	//    「連続する同じアプリ」を数えると交互に並んで正しくまとまらない。アプリごとに分ける。
+	const byApp = new Map<string, Poll[]>();
+	for (const poll of kept) {
+		const list = byApp.get(poll.app);
+		if (list) list.push(poll);
+		else byApp.set(poll.app, [poll]);
 	}
 
+	const sessions: Session[] = [];
+	for (const appPolls of byApp.values()) {
+		groupAppPolls(appPolls, opts, sessions);
+	}
+
+	// ③ 重なりセッションの並びを決定的にするため date→start→app で安定ソートする。
+	sessions.sort(
+		(a, b) =>
+			a.date.localeCompare(b.date) ||
+			a.start.localeCompare(b.start) ||
+			a.app.localeCompare(b.app),
+	);
 	return sessions;
 }

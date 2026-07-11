@@ -29,6 +29,7 @@ export interface TimemeterSettings {
 	pollIntervalSec: number; // 10
 	afkThresholdSec: number; // 180
 	mergeGapMin: number; // 3
+	captureAllApps: boolean; // true: 開いている全アプリを並行記録 / false: 最前面のみ
 	dataFolder: string; // "タイムメーター"
 	apps: Record<string, AppRule>;
 	showStatusBar: boolean;
@@ -40,6 +41,7 @@ export const DEFAULT_SETTINGS: TimemeterSettings = {
 	pollIntervalSec: 10,
 	afkThresholdSec: 180,
 	mergeGapMin: 3,
+	captureAllApps: true,
 	dataFolder: "タイムメーター",
 	apps: {},
 	showStatusBar: true,

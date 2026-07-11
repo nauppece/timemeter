@@ -132,6 +132,7 @@ export default class TimeMeterPlugin extends Plugin {
 			this.tracker = new Tracker(
 				this.settings.pollIntervalSec,
 				this.settings.afkThresholdSec,
+				this.settings.captureAllApps,
 				this.handlePoll,
 				(s: TrackerState) => {
 					this.trackerState = s;
@@ -259,6 +260,7 @@ export default class TimeMeterPlugin extends Plugin {
 		this.tracker = new Tracker(
 			this.settings.pollIntervalSec,
 			this.settings.afkThresholdSec,
+			this.settings.captureAllApps,
 			this.handlePoll,
 			(s: TrackerState) => {
 				this.trackerState = s;

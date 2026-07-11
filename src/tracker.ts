@@ -2,7 +2,7 @@
 // obsidian への依存は Platform のみ（実行時ガード）。window.setInterval を使う。
 
 import { Platform } from "obsidian";
-import { getFrontmostApp, getIdleSec, getWindowTitle } from "./detect";
+import { getFrontmostApp, getIdleSec, getVisibleApps, getWindowTitle } from "./detect";
 import type { Poll } from "./types";
 
 export type TrackerState = "rec" | "afk" | "pause" | "err";
@@ -12,6 +12,7 @@ const MAX_CONSECUTIVE_FAILURES = 3;
 export class Tracker {
 	private intervalMs: number;
 	private afkSec: number;
+	private captureAllApps: boolean;
 	private onPoll: (p: Poll) => void;
 	private onState: (s: TrackerState) => void;
 
@@ -26,11 +27,13 @@ export class Tracker {
 	constructor(
 		intervalSec: number,
 		afkSec: number,
+		captureAllApps: boolean,
 		onPoll: (p: Poll) => void,
 		onState: (s: TrackerState) => void,
 	) {
 		this.intervalMs = intervalSec * 1000;
 		this.afkSec = afkSec;
+		this.captureAllApps = captureAllApps;
 		this.onPoll = onPoll;
 		this.onState = onState;
 	}
@@ -114,7 +117,23 @@ export class Tracker {
 			this._currentApp = app;
 
 			this.setState("rec");
-			this.onPoll({ ts: now, app, title, idleSec });
+
+			// 記録対象アプリ集合を決める。captureAllApps ならデスクトップに開いている全アプリ、
+			// そうでなければ最前面のみ。最前面は必ず含める（visible 取得失敗時のフォールバックも兼ねる）。
+			let apps: string[];
+			if (this.captureAllApps) {
+				const visible = await getVisibleApps();
+				const set = new Set(visible);
+				set.add(app);
+				apps = [...set];
+			} else {
+				apps = [app];
+			}
+
+			// タイトルは最前面アプリだけに付ける（背景アプリは null）。
+			for (const a of apps) {
+				this.onPoll({ ts: now, app: a, title: a === app ? title : null, idleSec });
+			}
 		} finally {
 			this.ticking = false;
 		}
