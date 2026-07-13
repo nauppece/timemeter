@@ -6,7 +6,7 @@ const p = (hm: string, app: string, idleSec = 0, title: string | null = null) =>
 	const [h, m] = hm.split(":").map(Number);
 	return { ts: T0 + (h * 60 + m) * 60000, app, title, idleSec };
 };
-const OPT = { afkSec: 180, gapMin: 3, laps: [] as number[] };
+const OPT = { afkSec: 180, afkDetect: false, gapMin: 3, laps: [] as number[] };
 
 test("同一アプリの連続pollは1セッションに結合される", () => {
 	// 注: ブリーフ原文は3件目が p("09:10", ...) だったが、OPT.gapMin=3 のもとでは
@@ -69,4 +69,26 @@ test("出力は start→app の順に安定ソートされる", () => {
 	const s = aggregate([p("09:00", "Code"), p("09:00", "Chrome")], OPT);
 	// 同じ start(09:00) では app 名順（Chrome < Code）。
 	expect(s.map((x) => x.app)).toEqual(["Chrome", "Code"]);
+});
+
+// ── AFK（離席）検知 ──
+
+test("afkDetect OFF: 無操作でも落とさず1セッション・away=false", () => {
+	// idleSec がしきい値超えでも、OFF なら記録し続ける（従来の drop なし）。
+	const s = aggregate(
+		[p("09:00", "Code", 0), p("09:01", "Code", 999), p("09:02", "Code", 999)],
+		{ ...OPT, afkDetect: false },
+	);
+	expect(s).toHaveLength(1);
+	expect(s[0]).toMatchObject({ start: "09:00", end: "09:02", away: false });
+});
+
+test("afkDetect ON: 無操作しきい値で active→away に分割され away フラグが付く", () => {
+	const s = aggregate(
+		[p("09:00", "Code", 0), p("09:01", "Code", 0), p("09:02", "Code", 300), p("09:03", "Code", 300)],
+		{ ...OPT, afkDetect: true }, // afkSec=180
+	);
+	expect(s).toHaveLength(2);
+	expect(s[0]).toMatchObject({ start: "09:00", end: "09:01", away: false });
+	expect(s[1]).toMatchObject({ start: "09:02", end: "09:03", away: true });
 });

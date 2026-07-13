@@ -120,6 +120,7 @@ const EN: Dict = {
 	// ツールチップ・バッジ
 	"tip.recording": " (recording)",
 	"tip.now": "now",
+	"tip.away": "away",
 	"badge.left": "{n} left",
 
 	// 月
@@ -129,8 +130,11 @@ const EN: Dict = {
 	// 設定
 	"set.polling.name": "Polling interval (sec)",
 	"set.polling.desc": "How often to detect the frontmost app",
-	"set.afk.name": "AFK threshold (sec)",
-	"set.afk.desc": "Treat as away (AFK) after this many seconds of no input",
+	"set.afkDetect.name": "Detect away (AFK)",
+	"set.afkDetect.desc":
+		"Off (default): keep recording even with no input. On: mark idle time as 'away' on the timeline (dimmed). Away time is still counted in totals.",
+	"set.afk.name": "Away threshold (min)",
+	"set.afk.desc": "With AFK detection on, mark as away after this many minutes of no input",
 	"set.merge.name": "Merge gap (min)",
 	"set.merge.desc": "Merge into one session if the same app resumes within this many minutes",
 	"set.captureAll.name": "Track all open apps",
@@ -259,6 +263,7 @@ const JA: Dict = {
 
 	"tip.recording": "（記録中）",
 	"tip.now": "現在",
+	"tip.away": "離席",
 	"badge.left": "残り {n}件",
 
 	"month.legendLess": "少",
@@ -266,8 +271,11 @@ const JA: Dict = {
 
 	"set.polling.name": "ポーリング間隔（秒）",
 	"set.polling.desc": "最前面アプリを何秒おきに検知するか",
-	"set.afk.name": "AFK しきい値（秒）",
-	"set.afk.desc": "この秒数以上操作が無いと離席（AFK）とみなす",
+	"set.afkDetect.name": "離席（AFK）検知",
+	"set.afkDetect.desc":
+		"OFF（既定）：無操作でも記録し続けます。ON：無操作の時間を時系列で「離席」として薄色表示します（合計には含みます）。",
+	"set.afk.name": "離席とみなす時間（分）",
+	"set.afk.desc": "離席検知が ON のとき、この分数以上操作が無いと離席とみなす",
 	"set.merge.name": "結合ギャップ（分）",
 	"set.merge.desc": "同じアプリの記録がこの分数以内に再開したら1つのセッションにまとめる",
 	"set.captureAll.name": "開いている全アプリを記録",

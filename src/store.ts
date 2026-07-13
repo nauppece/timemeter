@@ -7,8 +7,8 @@
 import type { App } from "obsidian";
 import { MANUAL_APP, MARKER_END, MARKER_START, durMin, fmtDur, sessionKey, toMin, type Session } from "./types";
 
-const HEADER_ROW = "| 開始 | 終了 | 時間 | アプリ | タイトル | 説明 |";
-const SEP_ROW = "|------|------|------|--------|----------|------|";
+const HEADER_ROW = "| 開始 | 終了 | 時間 | アプリ | タイトル | 説明 | 離席 |";
+const SEP_ROW = "|------|------|------|--------|----------|------|------|";
 const MANAGED_FM_KEYS = new Set(["date", "total_min", "totals"]);
 
 /**
@@ -64,6 +64,7 @@ export function serializeTable(sessions: Session[]): string {
 			escapeCell(s.app),
 			escapeCell(s.title ?? ""),
 			escapeCell(s.note),
+			s.away ? "1" : "",
 		];
 		return `| ${cells.join(" | ")} |`;
 	});
@@ -95,12 +96,14 @@ export function parseSessions(content: string): Session[] {
 	const sessions: Session[] = [];
 	for (const line of dataLines) {
 		const cells = splitRow(line);
-		if (cells.length !== 6) continue; // 列数が合わない行は無視（防御的）
-		const [start, end, , app, titleRaw, noteRaw] = cells;
+		// 旧形式=6列（離席列なし）／新形式=7列（末尾が離席）。どちらも受け付ける（後方互換）。
+		if (cells.length !== 6 && cells.length !== 7) continue; // 列数が合わない行は無視（防御的）
+		const [start, end, , app, titleRaw, noteRaw, awayRaw] = cells;
 		if (!/^\d{1,2}:\d{2}$/.test(start) || !/^\d{1,2}:\d{2}$/.test(end)) continue; // 壊れた行は無視
 		const title = titleRaw === "" ? null : titleRaw;
 		const note = noteRaw.replace(/<br>/g, "\n");
-		sessions.push({ date, start, end, app, title, note, manual: app === MANUAL_APP });
+		const away = awayRaw === "1";
+		sessions.push({ date, start, end, app, title, note, manual: app === MANUAL_APP, away });
 	}
 	return sessions;
 }

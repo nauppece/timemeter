@@ -24,7 +24,7 @@ const DRAFT_LINES = ["- 09:02–10:18 VS Code — 実装", "- その他: Chrome 
 
 /** テスト用セッション生成ヘルパ */
 function s(start: string, end: string, app: string, note: string): Session {
-	return { date: "2026-07-09", start, end, app, title: null, note, manual: false };
+	return { date: "2026-07-09", start, end, app, title: null, note, manual: false, away: false };
 }
 
 describe("buildNippou", () => {

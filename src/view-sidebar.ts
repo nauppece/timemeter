@@ -648,7 +648,10 @@ export class TimemeterView extends ItemView {
 
 	private updateBadge(sessions: Session[]): void {
 		if (!this.badgeEl) return;
-		const count = sessions.filter((s) => !s.manual && !this.host.isHidden(s.app) && s.note.trim() === "").length;
+		// 離席（away）は無操作時間なので説明を促さない（バッジのカウントから除外）。
+		const count = sessions.filter(
+			(s) => !s.manual && !s.away && !this.host.isHidden(s.app) && s.note.trim() === "",
+		).length;
 		if (count > 0) {
 			this.badgeEl.setText(t("badge.left", { n: count }));
 			this.badgeEl.style.display = "inline-flex";
@@ -812,13 +815,14 @@ export class TimemeterView extends ItemView {
 				const cls = ["seg"];
 				if (hasNote) cls.push("note");
 				if (isLive) cls.push("live");
+				if (s.away) cls.push("away"); // 離席（AFK検知ON）は薄色で表示
 				const seg = lane.createDiv({ cls: cls.join(" ") });
 				seg.style.left = `${leftPct}%`;
 				seg.style.width = `${widthPct}%`;
 				seg.style.background = appColor(app);
 				this.attachTip(seg, s, isLive);
-				// 穴埋め: note が空の非手動セグメントはクリックで簡易入力を開く（許可されている場合のみ）。
-				if (opts.allowFillIn && !s.manual && !hasNote) {
+				// 穴埋め: note が空の非手動・非離席セグメントはクリックで簡易入力を開く（許可時のみ）。
+				if (opts.allowFillIn && !s.manual && !s.away && !hasNote) {
 					seg.addClass("fillable");
 					seg.setAttr("title", t("lanes.clickToNote"));
 					seg.addEventListener("click", (ev) => {
@@ -880,7 +884,8 @@ export class TimemeterView extends ItemView {
 			tip.empty();
 			tip.createEl("b", { text: s.app + (isLive ? t("tip.recording") : "") });
 			const rng = tip.createDiv({ cls: "rng" });
-			rng.setText(`${s.start} – ${isLive ? t("tip.now") : s.end} (${fmtDur(durMin(s))})`);
+			const awaySuffix = s.away ? ` · ${t("tip.away")}` : "";
+			rng.setText(`${s.start} – ${isLive ? t("tip.now") : s.end} (${fmtDur(durMin(s))})${awaySuffix}`);
 			if (s.title) tip.createDiv({ cls: "ttl", text: s.title });
 			if (s.note) tip.createDiv({ cls: "nt", text: s.note });
 			tip.style.display = "block";

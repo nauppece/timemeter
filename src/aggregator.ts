@@ -4,6 +4,7 @@ import type { Poll, Session } from "./types";
 
 export interface AggregateOptions {
 	afkSec: number;
+	afkDetect: boolean; // true: 無操作しきい値以上の poll を「離席」としてセッションを色分け
 	gapMin: number;
 	laps: number[]; // epoch ms 昇順
 }
@@ -43,7 +44,7 @@ function mostFrequentTitle(group: Poll[]): string | null {
 	return best;
 }
 
-function buildSession(group: Poll[], endsOnDayBoundary: boolean): Session {
+function buildSession(group: Poll[], endsOnDayBoundary: boolean, away: boolean): Session {
 	const first = group[0];
 	const last = group[group.length - 1];
 	return {
@@ -54,6 +55,7 @@ function buildSession(group: Poll[], endsOnDayBoundary: boolean): Session {
 		title: mostFrequentTitle(group),
 		note: "",
 		manual: false,
+		away,
 	};
 }
 
@@ -64,7 +66,14 @@ function buildSession(group: Poll[], endsOnDayBoundary: boolean): Session {
 function groupAppPolls(polls: Poll[], opts: AggregateOptions, out: Session[]): void {
 	const gapMs = opts.gapMin * 60 * 1000;
 	const laps = opts.laps;
+	// afkDetect ON のとき、無操作しきい値以上の poll は「離席」。離席状態が切り替わったら
+	// セッションを分けて、それぞれ away フラグ付きで積む（表示の色分け用）。
+	const awayOf = (p: Poll): boolean => opts.afkDetect && p.idleSec >= opts.afkSec;
 	let group: Poll[] = [];
+
+	const flush = (endsOnDayBoundary: boolean) => {
+		if (group.length > 0) out.push(buildSession(group, endsOnDayBoundary, awayOf(group[0])));
+	};
 
 	for (const poll of polls) {
 		if (group.length === 0) {
@@ -76,25 +85,21 @@ function groupAppPolls(polls: Poll[], opts: AggregateOptions, out: Session[]): v
 		const dayChanged = localDateStr(prev.ts) !== localDateStr(poll.ts);
 		const gapExceeded = poll.ts - prev.ts > gapMs;
 		const lapBetween = laps.some((l) => l > prev.ts && l <= poll.ts);
+		const awayChanged = awayOf(prev) !== awayOf(poll);
 
-		if (dayChanged || gapExceeded || lapBetween) {
-			out.push(buildSession(group, dayChanged));
+		if (dayChanged || gapExceeded || lapBetween || awayChanged) {
+			flush(dayChanged);
 			group = [poll];
 		} else {
 			group.push(poll);
 		}
 	}
-	if (group.length > 0) {
-		out.push(buildSession(group, false));
-	}
+	flush(false);
 }
 
 export function aggregate(polls: Poll[], opts: AggregateOptions): Session[] {
-	// ① AFK poll を除外し、時刻昇順に。
-	const kept = polls
-		.filter((p) => p.idleSec < opts.afkSec)
-		.slice()
-		.sort((a, b) => a.ts - b.ts);
+	// ① 時刻昇順に（基本は AFK を無視するので poll は落とさない。離席は色分けのみ）。
+	const kept = polls.slice().sort((a, b) => a.ts - b.ts);
 
 	// ② アプリ別に分割してからセッション化する。
 	//    同時刻に複数アプリの poll が来る（並行トラッキング）ため、時刻順の1本のストリームで

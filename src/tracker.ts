@@ -12,6 +12,7 @@ const MAX_CONSECUTIVE_FAILURES = 3;
 export class Tracker {
 	private intervalMs: number;
 	private afkSec: number;
+	private afkDetect: boolean;
 	private captureAllApps: boolean;
 	private onPoll: (p: Poll) => void;
 	private onState: (s: TrackerState) => void;
@@ -27,12 +28,14 @@ export class Tracker {
 	constructor(
 		intervalSec: number,
 		afkSec: number,
+		afkDetect: boolean,
 		captureAllApps: boolean,
 		onPoll: (p: Poll) => void,
 		onState: (s: TrackerState) => void,
 	) {
 		this.intervalMs = intervalSec * 1000;
 		this.afkSec = afkSec;
+		this.afkDetect = afkDetect;
 		this.captureAllApps = captureAllApps;
 		this.onPoll = onPoll;
 		this.onState = onState;
@@ -91,11 +94,10 @@ export class Tracker {
 		if (this.ticking) return;
 		this.ticking = true;
 		try {
+			// 基本は AFK を無視して記録し続ける。無操作でも poll を落とさない
+			// （＝開いている間は途切れず記録）。idleSec は poll に載せ、離席の色分けは
+			// afkDetect が ON のときだけ aggregator / 状態表示で使う。
 			const idleSec = await getIdleSec();
-			if (idleSec >= this.afkSec) {
-				this.setState("afk");
-				return;
-			}
 
 			const app = await getFrontmostApp();
 			if (app === null) {
@@ -116,7 +118,8 @@ export class Tracker {
 			}
 			this._currentApp = app;
 
-			this.setState("rec");
+			// afkDetect が ON かつしきい値以上の無操作なら「離席（afk）」表示。それ以外は記録中。
+			this.setState(this.afkDetect && idleSec >= this.afkSec ? "afk" : "rec");
 
 			// 記録対象アプリ集合を決める。captureAllApps ならデスクトップに開いている全アプリ、
 			// そうでなければ最前面のみ。最前面は必ず含める（visible 取得失敗時のフォールバックも兼ねる）。

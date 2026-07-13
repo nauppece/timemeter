@@ -8,7 +8,7 @@ import {
 import type { Session } from "../src/types";
 
 function s(start: string, end: string): Session {
-	return { date: "2026-07-09", start, end, app: "X", title: null, note: "", manual: false };
+	return { date: "2026-07-09", start, end, app: "X", title: null, note: "", manual: false, away: false };
 }
 
 describe("laneRange", () => {

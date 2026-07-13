@@ -3,7 +3,7 @@ import { appendManual, defaultManualStart, setNote } from "../src/quicklog";
 import type { Session } from "../src/types";
 
 const s = (start: string, end: string, app: string, note = ""): Session =>
-	({ date: "2026-07-09", start, end, app, title: null, note, manual: false });
+	({ date: "2026-07-09", start, end, app, title: null, note, manual: false, away: false });
 
 test("setNoteは該当キーの行だけ書き換える", () => {
 	const out = setNote([s("09:00", "10:00", "Code", "古い")], "09:00|Code", "新しい");
@@ -25,7 +25,7 @@ test("setNoteは元配列を破壊しない（新しい配列/オブジェクト
 
 test("appendManualは手動行をstart順で差し込む", () => {
 	const out = appendManual([s("09:00", "10:00", "Code")], "2026-07-09", "07:30", "08:10", "ランニング");
-	expect(out[0]).toMatchObject({ app: "✍️ 手動", start: "07:30", note: "ランニング", manual: true });
+	expect(out[0]).toMatchObject({ app: "✍️ 手動", start: "07:30", note: "ランニング", manual: true, away: false });
 	expect(out[1].app).toBe("Code");
 });
 

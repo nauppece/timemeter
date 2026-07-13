@@ -53,15 +53,28 @@ export class TimemeterSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName(t("set.afkDetect.name"))
+			.setDesc(t("set.afkDetect.desc"))
+			.addToggle((toggle) =>
+				toggle.setValue(plugin.settings.afkDetect).onChange(async (value) => {
+					plugin.settings.afkDetect = value;
+					await plugin.saveSettings();
+					plugin.restartTracker();
+					plugin.refreshOpenViews();
+				}),
+			);
+
+		// 離席とみなす時間は「分」で編集する（内部は秒で保持）。
+		new Setting(containerEl)
 			.setName(t("set.afk.name"))
 			.setDesc(t("set.afk.desc"))
 			.addSlider((slider) =>
 				slider
-					.setLimits(60, 600, 30)
-					.setValue(plugin.settings.afkThresholdSec)
+					.setLimits(1, 30, 1)
+					.setValue(Math.round(plugin.settings.afkThresholdSec / 60))
 					.setDynamicTooltip()
 					.onChange(async (value) => {
-						plugin.settings.afkThresholdSec = value;
+						plugin.settings.afkThresholdSec = value * 60;
 						await plugin.saveSettings();
 						plugin.restartTracker();
 					}),

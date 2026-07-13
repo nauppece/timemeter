@@ -130,6 +130,7 @@ export default class TimeMeterPlugin extends Plugin {
 			this.tracker = new Tracker(
 				this.settings.pollIntervalSec,
 				this.settings.afkThresholdSec,
+				this.settings.afkDetect,
 				this.settings.captureAllApps,
 				this.handlePoll,
 				(s: TrackerState) => {
@@ -258,6 +259,7 @@ export default class TimeMeterPlugin extends Plugin {
 		this.tracker = new Tracker(
 			this.settings.pollIntervalSec,
 			this.settings.afkThresholdSec,
+			this.settings.afkDetect,
 			this.settings.captureAllApps,
 			this.handlePoll,
 			(s: TrackerState) => {
@@ -575,7 +577,8 @@ export default class TimeMeterPlugin extends Plugin {
 	 */
 	async insertNippouDraft(): Promise<void> {
 		const sessions = await readDay(this.app, this.settings.dataFolder, todayStr());
-		const visible = sessions.filter((s) => !this.isHidden(s.app));
+		// 離席（away）は無操作時間なので日報の下書きからは除外する。
+		const visible = sessions.filter((s) => !this.isHidden(s.app) && !s.away);
 		const draftLines = buildNippou(visible);
 		if (draftLines.length === 0) {
 			new Notice(t("notice.noDescribedSessions"));
@@ -632,6 +635,7 @@ export default class TimeMeterPlugin extends Plugin {
 		try {
 			const sessions = aggregate(this.polls, {
 				afkSec: this.settings.afkThresholdSec,
+				afkDetect: this.settings.afkDetect,
 				gapMin: this.settings.mergeGapMin,
 				laps: this.laps,
 			});

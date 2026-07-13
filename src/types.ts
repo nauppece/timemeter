@@ -18,6 +18,7 @@ export interface Session {
 	title: string | null;
 	note: string; // 説明列。空は ""
 	manual: boolean; // ✍️ 手動行
+	away: boolean; // 離席（AFK検知ON時、無操作しきい値以上）。表示のみ色分け・合計には含む
 }
 
 export interface AppRule {
@@ -26,7 +27,8 @@ export interface AppRule {
 
 export interface TimemeterSettings {
 	pollIntervalSec: number; // 10
-	afkThresholdSec: number; // 180
+	afkThresholdSec: number; // 離席とみなす無操作秒数（afkDetect ON 時のみ有効）
+	afkDetect: boolean; // false: AFK無視（既定・途切れず記録）/ true: 無操作を離席として色分け
 	mergeGapMin: number; // 3
 	captureAllApps: boolean; // true: 開いている全アプリを並行記録 / false: 最前面のみ
 	dataFolder: string; // 記録先フォルダ（既定 "TimeMeter"）
@@ -39,7 +41,8 @@ export interface TimemeterSettings {
 
 export const DEFAULT_SETTINGS: TimemeterSettings = {
 	pollIntervalSec: 10,
-	afkThresholdSec: 180,
+	afkThresholdSec: 600,
+	afkDetect: false,
 	mergeGapMin: 3,
 	captureAllApps: true,
 	dataFolder: "TimeMeter",
