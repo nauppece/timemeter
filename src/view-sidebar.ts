@@ -34,9 +34,14 @@ export interface TimemeterHost {
 	setCurrentNote(text: string): Promise<void>;
 	setSegmentNote(date: string, key: string, text: string): Promise<void>;
 	appendDailyDone(date: string, app: string, text: string): Promise<void>;
+	appendToFile(path: string, app: string, text: string): Promise<void>;
+	dailyPath(date: string): string;
 	isHidden(app: string): boolean;
 	toggleHidden(app: string): void;
 }
+
+/** 追記先ドロップダウンで「デイリー」を表す特別値（実ファイルパスと衝突しない）。 */
+const TARGET_DAILY = "__daily__";
 
 /** 状態ラベルを現在言語で返す。 */
 function stateLabel(state: TrackerState): string {
@@ -108,6 +113,7 @@ export class TimemeterView extends ItemView {
 	private barsEl: HTMLElement | null = null;
 	private lanesEl: HTMLElement | null = null;
 	private activeSubtab: SubtabName = "bars";
+	private targetSelectToday: HTMLSelectElement | null = null;
 
 	// ── 下部タブ（今日/日別/月）
 	private todayTabBtn: HTMLButtonElement | null = null;
@@ -128,6 +134,7 @@ export class TimemeterView extends ItemView {
 	private dayBarsEl: HTMLElement | null = null;
 	private dayLanesEl: HTMLElement | null = null;
 	private dayActiveSubtab: SubtabName = "bars";
+	private targetSelectDay: HTMLSelectElement | null = null;
 	private dayViewDate: string = localDateStr(Date.now() - 24 * 60 * 60 * 1000);
 
 	// ── 月 view
@@ -321,6 +328,46 @@ export class TimemeterView extends ItemView {
 			cls: "tl-cap",
 			text: t("tl.caption"),
 		});
+
+		this.targetSelectToday = this.buildTargetRow(container);
+	}
+
+	/** 「追記先」ドロップダウン行（ラベル＋select）を作って select を返す。バーのクリック先に使う。 */
+	private buildTargetRow(container: HTMLElement): HTMLSelectElement {
+		const row = container.createDiv({ cls: "bar-target" });
+		row.createSpan({ cls: "lbl", text: t("target.label") });
+		return row.createEl("select", { cls: "tm-target-select" });
+	}
+
+	/**
+	 * 追記先ドロップダウンの選択肢を組み直す。先頭は「デイリー」、その下に最近使ったファイル
+	 * （最近開いた順）。直前の選択はまだ選択肢にあれば維持する。
+	 */
+	private populateTargetSelect(select: HTMLSelectElement | null, date: string): void {
+		if (!select) return;
+		const prev = select.value;
+		select.empty();
+		select.createEl("option", { value: TARGET_DAILY, text: t("target.daily") });
+		for (const path of this.recentMdFiles(this.host.dailyPath(date))) {
+			const base = (path.split("/").pop() ?? path).replace(/\.md$/i, "");
+			select.createEl("option", { value: path, text: base });
+		}
+		select.value =
+			prev && Array.from(select.options).some((o) => o.value === prev) ? prev : TARGET_DAILY;
+	}
+
+	/** 最近開いた .md ファイル（新しい順・存在するもの・デイリーは除外）を最大10件返す。 */
+	private recentMdFiles(excludePath: string): string[] {
+		const app = this.host.app;
+		const out: string[] = [];
+		for (const p of app.workspace.getLastOpenFiles()) {
+			if (p === excludePath) continue;
+			if (!p.toLowerCase().endsWith(".md")) continue;
+			if (!app.vault.getFileByPath(p)) continue;
+			out.push(p);
+			if (out.length >= 10) break;
+		}
+		return out;
 	}
 
 	/** 「日別」タブの中身（◀/▶ ナビ・合計・合計/時系列サブタブ）を組み立てる。 */
@@ -346,6 +393,8 @@ export class TimemeterView extends ItemView {
 
 		this.dayBarsEl = container.createDiv({ cls: "bars subview on" });
 		this.dayLanesEl = container.createDiv({ cls: "lanes subview" });
+
+		this.targetSelectDay = this.buildTargetRow(container);
 	}
 
 	/** 「月」タブの中身（ヒートマップ・凡例）を組み立てる。 */
@@ -448,7 +497,14 @@ export class TimemeterView extends ItemView {
 		this.liveSessionKey = app ? this.pickLatestKey(sessions, app) : null;
 
 		this.updateTodayTotal(sessions);
-		this.renderBars(this.barsEl, sessions, t("bars.emptyToday"), this.currentDate);
+		this.populateTargetSelect(this.targetSelectToday, this.currentDate);
+		this.renderBars(
+			this.barsEl,
+			sessions,
+			t("bars.emptyToday"),
+			this.currentDate,
+			this.targetSelectToday,
+		);
 		this.renderLanes(this.lanesEl, sessions, {
 			date: this.currentDate,
 			liveKey: this.liveSessionKey,
@@ -505,7 +561,14 @@ export class TimemeterView extends ItemView {
 		const app = this.host.getCurrentApp();
 		const liveKey = this.dayViewDate === todayStr && app ? this.pickLatestKey(sessions, app) : null;
 
-		this.renderBars(this.dayBarsEl, sessions, t("bars.emptyDay"), this.dayViewDate);
+		this.populateTargetSelect(this.targetSelectDay, this.dayViewDate);
+		this.renderBars(
+			this.dayBarsEl,
+			sessions,
+			t("bars.emptyDay"),
+			this.dayViewDate,
+			this.targetSelectDay,
+		);
 		this.renderLanes(this.dayLanesEl, sessions, {
 			date: this.dayViewDate,
 			liveKey,
@@ -625,6 +688,7 @@ export class TimemeterView extends ItemView {
 		sessions: Session[],
 		emptyMessage = t("bars.emptyToday"),
 		date = "",
+		targetSelect: HTMLSelectElement | null = null,
 	): void {
 		if (!bars) return;
 		bars.empty();
@@ -646,7 +710,7 @@ export class TimemeterView extends ItemView {
 			const row = bars.createDiv({ cls: "bar-row clickable" });
 			if (date) {
 				row.setAttr("title", t("bars.addToDaily"));
-				row.addEventListener("click", () => this.openDailyAdd(app, date));
+				row.addEventListener("click", () => this.openBarAdd(app, date, targetSelect));
 			}
 			row.createSpan({ cls: "nm", text: app });
 			const track = row.createDiv({ cls: "track" });
@@ -872,8 +936,12 @@ export class TimemeterView extends ItemView {
 		ctx.style.top = `${y}px`;
 	}
 
-	/** 合計バーのクリックから、そのアプリで何をしたかをデイリーの「やったこと」に追記するモーダルを開く。 */
-	private openDailyAdd(app: string, date: string): void {
+	/**
+	 * 合計バーのクリックから、そのアプリで何をしたかを入力し、追記先ドロップダウンで選んだ
+	 * ファイル（デイリー or 最近使ったファイル）に追記するモーダルを開く。
+	 */
+	private openBarAdd(app: string, date: string, targetSelect: HTMLSelectElement | null): void {
+		const target = targetSelect?.value || TARGET_DAILY;
 		new QuickLogModal(
 			this.host.app,
 			t("modal.dailyTitle", { app }),
@@ -881,7 +949,8 @@ export class TimemeterView extends ItemView {
 			(text) => {
 				const trimmed = text.trim();
 				if (!trimmed) return; // 空入力はキャンセル扱い
-				void this.host.appendDailyDone(date, app, trimmed);
+				if (target === TARGET_DAILY) void this.host.appendDailyDone(date, app, trimmed);
+				else void this.host.appendToFile(target, app, trimmed);
 			},
 			t("modal.add"),
 		).open();

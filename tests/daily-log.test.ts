@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { appendToDoneSection } from "../src/daily-log";
+import { appendLineAtEnd, appendToDoneSection } from "../src/daily-log";
 
 const SAMPLE = [
 	"---",
@@ -54,5 +54,17 @@ describe("appendToDoneSection", () => {
 
 	test("空文字列に追記できる", () => {
 		expect(appendToDoneSection("", "- X: y")).toBe("- X: y\n");
+	});
+});
+
+describe("appendLineAtEnd", () => {
+	test("末尾に改行付きで追記する", () => {
+		expect(appendLineAtEnd("# メモ\n本文", "- A: 1")).toBe("# メモ\n本文\n- A: 1\n");
+	});
+	test("末尾が改行なら二重にしない", () => {
+		expect(appendLineAtEnd("本文\n", "- A: 1")).toBe("本文\n- A: 1\n");
+	});
+	test("空文字列でも追記できる", () => {
+		expect(appendLineAtEnd("", "- A: 1")).toBe("- A: 1\n");
 	});
 });

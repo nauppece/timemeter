@@ -36,3 +36,9 @@ export function appendToDoneSection(content: string, line: string, heading = DON
 	lines.splice(insertAt, 0, line);
 	return lines.join("\n");
 }
+
+/** ファイル末尾に line を1行追記する（デイリー以外の追記先で使う）。末尾改行を1つに整える。 */
+export function appendLineAtEnd(content: string, line: string): string {
+	const sep = content === "" || content.endsWith("\n") ? "" : "\n";
+	return `${content}${sep}${line}\n`;
+}

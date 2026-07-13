@@ -1,7 +1,7 @@
 import { Notice, Platform, Plugin, type WorkspaceLeaf, moment } from "obsidian";
 import { aggregate, localDateStr } from "./src/aggregator";
 import { insertTimemeterBlock } from "./src/daily-embed";
-import { appendToDoneSection } from "./src/daily-log";
+import { appendLineAtEnd, appendToDoneSection } from "./src/daily-log";
 import { type EmbedHost, parseEmbedDate, renderEmbed } from "./src/embed";
 import { setLang, t } from "./src/i18n";
 import { buildNippou, insertNippouCallout } from "./src/nippou";
@@ -99,6 +99,8 @@ export default class TimeMeterPlugin extends Plugin {
 			setCurrentNote: (text) => plugin.setCurrentNote(text),
 			setSegmentNote: (date, key, text) => plugin.setSegmentNote(date, key, text),
 			appendDailyDone: (date, app, text) => plugin.appendDailyDone(date, app, text),
+			appendToFile: (path, app, text) => plugin.appendToFile(path, app, text),
+			dailyPath: (date) => plugin.dailyPathForDate(date),
 			isHidden: (app) => plugin.isHidden(app),
 			toggleHidden: (app) => plugin.toggleHidden(app),
 		};
@@ -496,11 +498,35 @@ export default class TimeMeterPlugin extends Plugin {
 		return this.dailyPathForDate(todayStr());
 	}
 
-	/** "YYYY-MM-DD" から対応するデイリーノートのパス（`デイリー/YYYY-MM-DD (ddd).md`）を返す。 */
-	private dailyPathForDate(dateStr: string): string {
+	/**
+	 * Obsidian コア「デイリーノート」プラグインの folder/format を読む（内部API）。
+	 * 未設定・取得失敗時は従来の既定（`デイリー` / `YYYY-MM-DD (ddd)`）にフォールバックする。
+	 * これで vault ごとのデイリー設定に自動追随し、固定ハードコードを避ける。
+	 */
+	private dailyNotesConfig(): { folder: string; format: string } {
+		const fallback = { folder: DAILY_FOLDER, format: "YYYY-MM-DD (ddd)" };
+		try {
+			// biome-ignore lint: Obsidian の internal API（型定義に無い）にアクセスする。
+			const opts = (this.app as any).internalPlugins?.getPluginById?.("daily-notes")?.instance
+				?.options;
+			return {
+				folder: (opts?.folder ?? "").trim() || fallback.folder,
+				format: (opts?.format ?? "").trim() || fallback.format,
+			};
+		} catch {
+			return fallback;
+		}
+	}
+
+	/**
+	 * "YYYY-MM-DD" から対応するデイリーノートのパスを返す。フォルダ・日付書式はコアの
+	 * デイリーノート設定に追随する。曜日トークン（ddd）は既存ファイルに合わせ locale=en で組む。
+	 */
+	dailyPathForDate(dateStr: string): string {
+		const { folder, format } = this.dailyNotesConfig();
 		const momentFn = moment as unknown as (input?: string) => import("moment").Moment;
-		const fileName = momentFn(dateStr).locale("en").format("YYYY-MM-DD (ddd)");
-		return `${DAILY_FOLDER}/${fileName}.md`;
+		const fileName = momentFn(dateStr).locale("en").format(format);
+		return folder ? `${folder}/${fileName}.md` : `${fileName}.md`;
 	}
 
 	/**
@@ -519,6 +545,23 @@ export default class TimeMeterPlugin extends Plugin {
 		const line = `- ${app}: ${trimmed}`;
 		await this.app.vault.process(file, (content) => appendToDoneSection(content, line));
 		new Notice(t("notice.dailyAppended"));
+	}
+
+	/**
+	 * 追記先ドロップダウンで選んだデイリー以外のファイルに `- {app}: {内容}` を末尾追記する
+	 * （TimemeterHost.appendToFile の実体）。ファイルが無い・空入力なら何もしない（Notice のみ）。
+	 */
+	async appendToFile(path: string, app: string, text: string): Promise<void> {
+		const trimmed = text.trim();
+		if (!trimmed) return;
+		const file = this.app.vault.getFileByPath(path);
+		if (!file) {
+			new Notice(t("notice.fileNotFound"));
+			return;
+		}
+		const line = `- ${app}: ${trimmed}`;
+		await this.app.vault.process(file, (content) => appendLineAtEnd(content, line));
+		new Notice(t("notice.appended"));
 	}
 
 	/**
