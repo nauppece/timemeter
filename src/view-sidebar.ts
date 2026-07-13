@@ -11,7 +11,7 @@ import {
 	segPos,
 	tickStepMin,
 } from "./lane-geometry";
-import { QuickLogModal } from "./quicklog-modal";
+import { type ModalPicker, QuickLogModal } from "./quicklog-modal";
 import { readDay } from "./store";
 import type { TrackerState } from "./tracker";
 import { durMin, fmtDur, type Session, sessionKey, toMin } from "./types";
@@ -113,7 +113,6 @@ export class TimemeterView extends ItemView {
 	private barsEl: HTMLElement | null = null;
 	private lanesEl: HTMLElement | null = null;
 	private activeSubtab: SubtabName = "bars";
-	private targetSelectToday: HTMLSelectElement | null = null;
 
 	// ── 下部タブ（今日/日別/月）
 	private todayTabBtn: HTMLButtonElement | null = null;
@@ -134,7 +133,6 @@ export class TimemeterView extends ItemView {
 	private dayBarsEl: HTMLElement | null = null;
 	private dayLanesEl: HTMLElement | null = null;
 	private dayActiveSubtab: SubtabName = "bars";
-	private targetSelectDay: HTMLSelectElement | null = null;
 	private dayViewDate: string = localDateStr(Date.now() - 24 * 60 * 60 * 1000);
 
 	// ── 月 view
@@ -328,32 +326,19 @@ export class TimemeterView extends ItemView {
 			cls: "tl-cap",
 			text: t("tl.caption"),
 		});
-
-		this.targetSelectToday = this.buildTargetRow(container);
-	}
-
-	/** 「追記先」ドロップダウン行（ラベル＋select）を作って select を返す。バーのクリック先に使う。 */
-	private buildTargetRow(container: HTMLElement): HTMLSelectElement {
-		const row = container.createDiv({ cls: "bar-target" });
-		row.createSpan({ cls: "lbl", text: t("target.label") });
-		return row.createEl("select", { cls: "tm-target-select" });
 	}
 
 	/**
-	 * 追記先ドロップダウンの選択肢を組み直す。先頭は「デイリー」、その下に最近使ったファイル
-	 * （最近開いた順）。直前の選択はまだ選択肢にあれば維持する。
+	 * 追記先モーダルに渡すピッカー設定を作る。先頭は「デイリー」、その下に最近使ったファイル
+	 * （最近開いた順）。バーのクリックごとに最新の履歴で組み直す。
 	 */
-	private populateTargetSelect(select: HTMLSelectElement | null, date: string): void {
-		if (!select) return;
-		const prev = select.value;
-		select.empty();
-		select.createEl("option", { value: TARGET_DAILY, text: t("target.daily") });
+	private buildTargetPicker(date: string): ModalPicker {
+		const options = [{ value: TARGET_DAILY, label: t("target.daily") }];
 		for (const path of this.recentMdFiles(this.host.dailyPath(date))) {
 			const base = (path.split("/").pop() ?? path).replace(/\.md$/i, "");
-			select.createEl("option", { value: path, text: base });
+			options.push({ value: path, label: base });
 		}
-		select.value =
-			prev && Array.from(select.options).some((o) => o.value === prev) ? prev : TARGET_DAILY;
+		return { label: t("target.label"), options, initial: TARGET_DAILY };
 	}
 
 	/** 最近開いた .md ファイル（新しい順・存在するもの・デイリーは除外）を最大10件返す。 */
@@ -393,8 +378,6 @@ export class TimemeterView extends ItemView {
 
 		this.dayBarsEl = container.createDiv({ cls: "bars subview on" });
 		this.dayLanesEl = container.createDiv({ cls: "lanes subview" });
-
-		this.targetSelectDay = this.buildTargetRow(container);
 	}
 
 	/** 「月」タブの中身（ヒートマップ・凡例）を組み立てる。 */
@@ -497,14 +480,7 @@ export class TimemeterView extends ItemView {
 		this.liveSessionKey = app ? this.pickLatestKey(sessions, app) : null;
 
 		this.updateTodayTotal(sessions);
-		this.populateTargetSelect(this.targetSelectToday, this.currentDate);
-		this.renderBars(
-			this.barsEl,
-			sessions,
-			t("bars.emptyToday"),
-			this.currentDate,
-			this.targetSelectToday,
-		);
+		this.renderBars(this.barsEl, sessions, t("bars.emptyToday"), this.currentDate);
 		this.renderLanes(this.lanesEl, sessions, {
 			date: this.currentDate,
 			liveKey: this.liveSessionKey,
@@ -561,14 +537,7 @@ export class TimemeterView extends ItemView {
 		const app = this.host.getCurrentApp();
 		const liveKey = this.dayViewDate === todayStr && app ? this.pickLatestKey(sessions, app) : null;
 
-		this.populateTargetSelect(this.targetSelectDay, this.dayViewDate);
-		this.renderBars(
-			this.dayBarsEl,
-			sessions,
-			t("bars.emptyDay"),
-			this.dayViewDate,
-			this.targetSelectDay,
-		);
+		this.renderBars(this.dayBarsEl, sessions, t("bars.emptyDay"), this.dayViewDate);
 		this.renderLanes(this.dayLanesEl, sessions, {
 			date: this.dayViewDate,
 			liveKey,
@@ -688,7 +657,6 @@ export class TimemeterView extends ItemView {
 		sessions: Session[],
 		emptyMessage = t("bars.emptyToday"),
 		date = "",
-		targetSelect: HTMLSelectElement | null = null,
 	): void {
 		if (!bars) return;
 		bars.empty();
@@ -710,7 +678,7 @@ export class TimemeterView extends ItemView {
 			const row = bars.createDiv({ cls: "bar-row clickable" });
 			if (date) {
 				row.setAttr("title", t("bars.addToDaily"));
-				row.addEventListener("click", () => this.openBarAdd(app, date, targetSelect));
+				row.addEventListener("click", () => this.openBarAdd(app, date));
 			}
 			row.createSpan({ cls: "nm", text: app });
 			const track = row.createDiv({ cls: "track" });
@@ -937,22 +905,22 @@ export class TimemeterView extends ItemView {
 	}
 
 	/**
-	 * 合計バーのクリックから、そのアプリで何をしたかを入力し、追記先ドロップダウンで選んだ
-	 * ファイル（デイリー or 最近使ったファイル）に追記するモーダルを開く。
+	 * 合計バーのクリックから、そのアプリで何をしたかを入力し、モーダル内の「追記先」セレクトで
+	 * 選んだファイル（デイリー or 最近使ったファイル）に追記するモーダルを開く。
 	 */
-	private openBarAdd(app: string, date: string, targetSelect: HTMLSelectElement | null): void {
-		const target = targetSelect?.value || TARGET_DAILY;
+	private openBarAdd(app: string, date: string): void {
 		new QuickLogModal(
 			this.host.app,
 			t("modal.dailyTitle", { app }),
 			t("modal.dailyPlaceholder"),
-			(text) => {
+			(text, target) => {
 				const trimmed = text.trim();
 				if (!trimmed) return; // 空入力はキャンセル扱い
 				if (target === TARGET_DAILY) void this.host.appendDailyDone(date, app, trimmed);
 				else void this.host.appendToFile(target, app, trimmed);
 			},
 			t("modal.add"),
+			this.buildTargetPicker(date),
 		).open();
 	}
 
