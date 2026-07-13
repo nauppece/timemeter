@@ -16,11 +16,12 @@ export function hasTimemeterBlock(content: string): boolean {
  * 既にブロックがある場合は null を返す（＝呼び出し側は何もしない・Notice のみ）。
  * マーカー外の既存本文は一切変更しない（見出し行より前後の並びを保つだけ）。
  */
-export function insertTimemeterBlock(content: string): string | null {
+export function insertTimemeterBlock(content: string, heading: string = TARGET_HEADING): string | null {
 	if (hasTimemeterBlock(content)) return null;
 
 	const lines = content.split("\n");
-	const idx = lines.findIndex((l) => l.trim() === TARGET_HEADING);
+	const target = heading.trim();
+	const idx = target === "" ? -1 : lines.findIndex((l) => l.trim() === target);
 
 	if (idx === -1) {
 		const withTrailingNl = content.endsWith("\n") ? content : `${content}\n`;

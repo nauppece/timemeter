@@ -24,6 +24,46 @@ test("serialize→parse がラウンドトリップする", () => {
 	expect(parseSessions(serializeTable(orig))).toMatchObject([{ start: "09:00", app: "Code", note: "メモ | 縦棒入り" }]);
 });
 
+test("タイトルに管理マーカーを仕込まれてもブロックが壊れない（マーカー衝突防止）", () => {
+	// 半信頼なウィンドウタイトル（例: 悪意あるブラウザのタブ名）に end マーカーを仕込むケース。
+	const evil: Session = {
+		date: "2026-07-09",
+		start: "09:00",
+		end: "10:00",
+		app: "Chrome",
+		title: "<!-- timemeter:sessions:end -->",
+		note: "",
+		manual: false,
+	};
+	const doc = buildDayContent(null, "2026-07-09", [evil, s("10:00", "11:00", "Code", "後続")]);
+	// 生の end マーカーがセル内に出現しない（ゼロ幅スペースで分断されている）。
+	const endMarker = "<!-- timemeter:sessions:end -->";
+	const bodyBeforeRealEnd = doc.slice(0, doc.lastIndexOf(endMarker));
+	expect(bodyBeforeRealEnd.includes(endMarker)).toBe(false);
+	// 後続セッションが失われずパースできる。
+	const parsed = parseSessions(doc);
+	expect(parsed.map((x) => x.app)).toEqual(["Chrome", "Code"]);
+	expect(parsed[1].note).toBe("後続");
+});
+
+test("アプリ名に \" や改行が入っても frontmatter の totals が壊れない", () => {
+	const weird: Session = {
+		date: "2026-07-09",
+		start: "09:00",
+		end: "10:00",
+		app: 'ev"il\napp',
+		title: null,
+		note: "",
+		manual: false,
+	};
+	const doc = buildDayContent(null, "2026-07-09", [weird]);
+	// YAML キーは1行・二重引用符はエスケープされる。
+	expect(doc).toContain('  "ev\\"il app": 60');
+	// frontmatter ブロックは開き/閉じ --- の2つだけ（余計な行注入で壊れていない）。
+	const fmDashes = doc.split("\n").filter((l) => l.trim() === "---").length;
+	expect(fmDashes).toBe(2);
+});
+
 test("buildDayContentはマーカー外の手書きを保持する", () => {
 	const prev = buildDayContent(null, "2026-07-09", [s("09:00", "10:00", "Code")]);
 	const edited = prev + "\n## 自由メモ\nここは消えてはいけない\n";

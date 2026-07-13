@@ -137,6 +137,9 @@ const EN: Dict = {
 		"At each poll, record every app with a window open on the desktop, not only the frontmost one — so concurrent work is captured. Totals can exceed real time; exclude apps you don't care about in the per-app rules below. Off = frontmost app only.",
 	"set.folder.name": "Data folder",
 	"set.folder.desc": "Folder name where record Markdown files are stored",
+	"set.dailyHeading.name": "Daily-note heading",
+	"set.dailyHeading.desc":
+		"Heading in the daily note where the app-bar append, the embed, and the report draft are inserted. Leave empty to append at the end of the file.",
 	"set.statusbar.name": "Show status bar",
 	"set.statusbar.desc": "Show tracking state in the status bar",
 	"set.sidebar.name": "Open sidebar on startup",
@@ -270,6 +273,9 @@ const JA: Dict = {
 		"毎ポーリング、最前面だけでなくデスクトップにウィンドウを開いている全アプリを記録します（同時作業も残せます）。合計は実時間を超えることがあります。不要なアプリは下の「アプリ別ルール」で除外してください。OFF で最前面のみ。",
 	"set.folder.name": "データフォルダ",
 	"set.folder.desc": "記録先の Markdown ファイルを置くフォルダ名",
+	"set.dailyHeading.name": "デイリーの見出し",
+	"set.dailyHeading.desc":
+		"合計バーからの追記・埋め込み・日報下書きをデイリーのどの見出しの下に入れるか。空にするとファイル末尾に追記します。",
 	"set.statusbar.name": "ステータスバー表示",
 	"set.statusbar.desc": "ステータスバーに記録状態を表示する",
 	"set.sidebar.name": "起動時にサイドバーを開く",

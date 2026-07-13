@@ -5,13 +5,14 @@
 const DONE_HEADING = "## ✅ やったこと";
 
 /**
- * `## ✅ やったこと` セクションの末尾（そのセクション内の最後の非空行の直後）に line を
- * 追記した新しい本文を返す。見出しが無ければファイル末尾に追記する。
+ * 指定した見出しのセクション末尾（そのセクション内の最後の非空行の直後）に line を追記した
+ * 新しい本文を返す。見出しが空文字/未指定、または本文に見つからない場合はファイル末尾に追記する。
  * マーカー外・他セクションの既存本文は保持し、重複追記は許容する（毎回1行増える）。
  */
 export function appendToDoneSection(content: string, line: string, heading = DONE_HEADING): string {
 	const lines = content.split("\n");
-	const hIdx = lines.findIndex((l) => l.trim() === heading);
+	const target = heading.trim();
+	const hIdx = target === "" ? -1 : lines.findIndex((l) => l.trim() === target);
 
 	if (hIdx === -1) {
 		const sep = content === "" || content.endsWith("\n") ? "" : "\n";

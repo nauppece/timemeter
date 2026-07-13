@@ -478,7 +478,7 @@ export default class TimeMeterPlugin extends Plugin {
 
 		let alreadyPresent = false;
 		await this.app.vault.process(file, (content) => {
-			const next = insertTimemeterBlock(content);
+			const next = insertTimemeterBlock(content, this.settings.dailyHeading);
 			if (next === null) {
 				alreadyPresent = true;
 				return content;
@@ -543,7 +543,9 @@ export default class TimeMeterPlugin extends Plugin {
 			return;
 		}
 		const line = `- ${app}: ${trimmed}`;
-		await this.app.vault.process(file, (content) => appendToDoneSection(content, line));
+		await this.app.vault.process(file, (content) =>
+			appendToDoneSection(content, line, this.settings.dailyHeading),
+		);
 		new Notice(t("notice.dailyAppended"));
 	}
 
@@ -589,7 +591,7 @@ export default class TimeMeterPlugin extends Plugin {
 
 		let alreadyPresent = false;
 		await this.app.vault.process(file, (content) => {
-			const next = insertNippouCallout(content, draftLines);
+			const next = insertNippouCallout(content, draftLines, this.settings.dailyHeading);
 			if (next === null) {
 				alreadyPresent = true;
 				return content;

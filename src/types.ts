@@ -29,7 +29,8 @@ export interface TimemeterSettings {
 	afkThresholdSec: number; // 180
 	mergeGapMin: number; // 3
 	captureAllApps: boolean; // true: 開いている全アプリを並行記録 / false: 最前面のみ
-	dataFolder: string; // "タイムメーター"
+	dataFolder: string; // 記録先フォルダ（既定 "TimeMeter"）
+	dailyHeading: string; // デイリーの追記/挿入先の見出し（空なら末尾）。既定 "## ✅ やったこと"
 	apps: Record<string, AppRule>;
 	showStatusBar: boolean;
 	showSidebarOnStart: boolean;
@@ -41,7 +42,8 @@ export const DEFAULT_SETTINGS: TimemeterSettings = {
 	afkThresholdSec: 180,
 	mergeGapMin: 3,
 	captureAllApps: true,
-	dataFolder: "タイムメーター",
+	dataFolder: "TimeMeter",
+	dailyHeading: "## ✅ やったこと",
 	apps: {},
 	showStatusBar: true,
 	showSidebarOnStart: true,

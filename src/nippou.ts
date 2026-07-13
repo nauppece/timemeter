@@ -82,13 +82,18 @@ export function hasNippouCallout(content: string): boolean {
  * 既に callout がある場合は null を返す（＝呼び出し側は何もしない・Notice のみ）。
  * マーカー外の既存本文は一切変更しない（挿入のみ）。
  */
-export function insertNippouCallout(content: string, draftLines: string[]): string | null {
+export function insertNippouCallout(
+	content: string,
+	draftLines: string[],
+	heading: string = TARGET_HEADING,
+): string | null {
 	if (hasNippouCallout(content)) return null;
 
 	const calloutBlock = [calloutHeader(), ...draftLines.map((l) => `> ${l}`)].join("\n");
 
 	const lines = content.split("\n");
-	const headingIdx = lines.findIndex((l) => l.trim() === TARGET_HEADING);
+	const target = heading.trim();
+	const headingIdx = target === "" ? -1 : lines.findIndex((l) => l.trim() === target);
 
 	if (headingIdx === -1) {
 		const withTrailingNl = content.endsWith("\n") ? content : `${content}\n`;

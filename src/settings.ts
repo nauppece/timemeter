@@ -104,6 +104,19 @@ export class TimemeterSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName(t("set.dailyHeading.name"))
+			.setDesc(t("set.dailyHeading.desc"))
+			.addText((text) =>
+				text
+					.setPlaceholder(DEFAULT_SETTINGS.dailyHeading)
+					.setValue(plugin.settings.dailyHeading)
+					.onChange(async (value) => {
+						plugin.settings.dailyHeading = value.trim();
+						await plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
 			.setName(t("set.statusbar.name"))
 			.setDesc(t("set.statusbar.desc"))
 			.addToggle((toggle) =>

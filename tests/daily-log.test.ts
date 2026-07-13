@@ -52,6 +52,21 @@ describe("appendToDoneSection", () => {
 		expect(out).toContain("本文");
 	});
 
+	test("見出しに空文字を指定するとファイル末尾に追記する", () => {
+		const out = appendToDoneSection(SAMPLE, "- X: y", "");
+		expect(out.endsWith("- X: y\n")).toBe(true);
+		// やったこと 欄には入らない（末尾に落ちる）。
+		const lines = out.split("\n");
+		expect(lines.indexOf("- X: y")).toBeGreaterThan(lines.indexOf("## 📝 メモ"));
+	});
+
+	test("カスタム見出しを指定するとその下に入る", () => {
+		const content = ["# 日", "", "## Log", "", "## メモ"].join("\n");
+		const out = appendToDoneSection(content, "- A: 1", "## Log");
+		const lines = out.split("\n");
+		expect(lines[lines.indexOf("## Log") + 1]).toBe("- A: 1");
+	});
+
 	test("空文字列に追記できる", () => {
 		expect(appendToDoneSection("", "- X: y")).toBe("- X: y\n");
 	});
