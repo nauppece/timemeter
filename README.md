@@ -9,6 +9,14 @@
 - 記録できるのは **Obsidian を開いている（プラグインが読み込まれている）間だけ** です。Obsidian を閉じている間の操作は追跡されません。
 - モバイル（iOS/iPadOS/Android）では自動追跡は行われませんが、データの閲覧（サイドバー・埋め込み）と手動ログの追加はできます。
 
+> **⚠️ システムコマンドの実行について（重要）**
+> 自動追跡のため、macOS デスクトップ版では `child_process` 経由で macOS 標準コマンドを実行します：
+> `osascript`（最前面アプリ名・ウィンドウタイトルの取得）と `ioreg`（無操作＝AFK 秒数の取得）。
+> 実行は `Platform.isDesktopApp` が真のときだけで、モバイルでは一切呼ばれません（`child_process` も読み込みません）。
+> 取得した情報（アプリ名・ウィンドウタイトル・アイドル秒）は Vault 内の Markdown に保存されるだけで、外部送信は行いません。
+>
+> *This plugin runs macOS system commands (`osascript`, `ioreg`) via `child_process` on desktop to detect the frontmost app, window title, and idle time. It never runs on mobile and never sends data anywhere — everything is written to Markdown in your vault.*
+
 ## できること / できないこと
 
 ### デスクトップ (macOS)
