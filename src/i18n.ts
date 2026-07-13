@@ -110,6 +110,7 @@ const EN: Dict = {
 	"bars.addToDaily": "Click to append to the selected file",
 	"target.label": "Append to",
 	"target.daily": "Daily note",
+	"target.sessionNote": "This record's note",
 
 	// コンテキストメニュー
 	"ctx.hide": 'Hide "{app}"',
@@ -250,6 +251,7 @@ const JA: Dict = {
 	"bars.addToDaily": "クリックで選択中のファイルに追記",
 	"target.label": "追記先",
 	"target.daily": "デイリー",
+	"target.sessionNote": "この記録の説明",
 
 	"ctx.hide": "「{app}」を非表示にする",
 	"ctx.show": "「{app}」を再表示する",

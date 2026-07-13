@@ -42,6 +42,8 @@ export interface TimemeterHost {
 
 /** 追記先ドロップダウンで「デイリー」を表す特別値（実ファイルパスと衝突しない）。 */
 const TARGET_DAILY = "__daily__";
+/** 追記先ピッカーで「このセッションの説明列（データファイル）」を表す特別値。 */
+const TARGET_SESSION = "__session__";
 
 /** 状態ラベルを現在言語で返す。 */
 function stateLabel(state: TrackerState): string {
@@ -329,16 +331,23 @@ export class TimemeterView extends ItemView {
 	}
 
 	/**
-	 * 追記先モーダルに渡すピッカー設定を作る。先頭は「デイリー」、その下に最近使ったファイル
-	 * （最近開いた順）。バーのクリックごとに最新の履歴で組み直す。
+	 * 追記先モーダルに渡すピッカー設定を作る。デイリー＋最近使ったファイル（最近開いた順）。
+	 * withSessionNote=true のときは先頭に「このセッションの説明」（データファイルの説明列）を足し、
+	 * それを既定選択にする（時系列セグメントからの入力用）。バー/セグメントのクリックごとに組み直す。
 	 */
-	private buildTargetPicker(date: string): ModalPicker {
-		const options = [{ value: TARGET_DAILY, label: t("target.daily") }];
+	private buildTargetPicker(date: string, withSessionNote = false): ModalPicker {
+		const options: { value: string; label: string }[] = [];
+		if (withSessionNote) options.push({ value: TARGET_SESSION, label: t("target.sessionNote") });
+		options.push({ value: TARGET_DAILY, label: t("target.daily") });
 		for (const path of this.recentMdFiles(this.host.dailyPath(date))) {
 			const base = (path.split("/").pop() ?? path).replace(/\.md$/i, "");
 			options.push({ value: path, label: base });
 		}
-		return { label: t("target.label"), options, initial: TARGET_DAILY };
+		return {
+			label: t("target.label"),
+			options,
+			initial: withSessionNote ? TARGET_SESSION : TARGET_DAILY,
+		};
 	}
 
 	/** 最近開いた .md ファイル（新しい順・存在するもの・デイリーは除外）を最大10件返す。 */
@@ -924,17 +933,34 @@ export class TimemeterView extends ItemView {
 		).open();
 	}
 
-	/** note が空のセグメントをクリックしたときの簡易入力（QuickLogModal 流用）。今日/日別タブ共通。 */
+	/**
+	 * note が空のセグメントをクリックしたときの簡易入力（QuickLogModal 流用）。今日/日別タブ共通。
+	 * 追記先ピッカーで「このセッションの説明（既定）／デイリー／最近使ったファイル」を選べる。
+	 */
 	private openFillIn(session: Session, date: string, onSaved: () => Promise<void>): void {
-		const label = `${session.app} ${session.start}–${session.end}`;
-		new QuickLogModal(this.host.app, t("modal.fillInTitle", { label }), t("modal.whatWereDoing"), (text) => {
-			const trimmed = text.trim();
-			if (!trimmed) return; // 空入力はキャンセル扱い（既存 note を空で消さない）
-			void (async () => {
-				await this.host.setSegmentNote(date, sessionKey(session), trimmed);
-				await onSaved();
-				new Notice(t("notice.noteSaved"));
-			})();
-		}).open();
+		const app = session.app;
+		const label = `${app} ${session.start}–${session.end}`;
+		new QuickLogModal(
+			this.host.app,
+			t("modal.fillInTitle", { label }),
+			t("modal.whatWereDoing"),
+			(text, target) => {
+				const trimmed = text.trim();
+				if (!trimmed) return; // 空入力はキャンセル扱い（既存 note を空で消さない）
+				void (async () => {
+					if (target === TARGET_SESSION) {
+						await this.host.setSegmentNote(date, sessionKey(session), trimmed);
+						await onSaved();
+						new Notice(t("notice.noteSaved"));
+					} else if (target === TARGET_DAILY) {
+						await this.host.appendDailyDone(date, app, trimmed);
+					} else {
+						await this.host.appendToFile(target, app, trimmed);
+					}
+				})();
+			},
+			t("modal.save"),
+			this.buildTargetPicker(date, true),
+		).open();
 	}
 }

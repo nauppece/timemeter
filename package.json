@@ -1,6 +1,6 @@
 {
   "name": "obsidian-timemeter",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "最前面アプリを自動追跡して Markdown に記録するタイムトラッカー（Obsidian プラグイン）",
   "main": "main.js",
   "scripts": {
