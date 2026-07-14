@@ -2,8 +2,38 @@
 
 > UI は日英切替に対応（既定は英語）。以下の説明は日本語 UI を基準にしています。
 
-最前面アプリを自動追跡して `タイムメーター/YYYY-MM-DD.md` に Markdown で記録する Obsidian プラグインです。
+最前面アプリを自動追跡して `TimeMeter/YYYY-MM-DD.md` に Markdown で記録する Obsidian プラグインです。
 「タップして一言メモ」で “そのセッションで何をしていたか” を残せるようにするのが主眼で、自動追跡そのものは主役ではありません。
+
+## インストール / Install
+
+### 1. コミュニティプラグイン経由（審査通過後）
+
+> 現在は公式コミュニティストアへ申請予定です。承認されると以下で入ります。
+
+Obsidian の 設定 → コミュニティプラグイン → 閲覧 で **「TimeMeter」** を検索 → インストール → 有効化。
+
+### 2. BRAT 経由（ベータ／今すぐ入れる）
+
+1. コミュニティプラグインから **BRAT**（Obsidian42 - BRAT）をインストール・有効化。
+2. BRAT の "Add Beta plugin" に `nauppece/timemeter` を追加。
+3. 設定 → コミュニティプラグインで **TimeMeter** を有効化。
+
+### 3. 手動（Git / リリース）
+
+[Releases](https://github.com/nauppece/timemeter/releases) の最新版から `main.js` / `manifest.json` / `styles.css` の3つをダウンロードし、
+Vault の `<vault>/.obsidian/plugins/timemeter/` に置いて、設定 → コミュニティプラグインで有効化。
+
+```sh
+# 開発者向け（ソースからビルドして自分の Vault に配置）
+git clone https://github.com/nauppece/timemeter.git
+cd timemeter
+npm install
+export TIMEMETER_PLUGIN_DIR="/path/to/YourVault/.obsidian/plugins/timemeter"
+npm run deploy   # build して上記フォルダへ main.js/manifest.json/styles.css を配置
+```
+
+> macOS で自動追跡を使うには、初回に **オートメーション**と**アクセシビリティ**の許可が必要です（後述）。許可するまではサイドバーに権限エラーが出ますが、閲覧・手動ログは動きます。
 
 - 自動追跡（最前面アプリ・任意でウィンドウタイトル・AFK 検知）ができるのは **macOS デスクトップ版のみ**。
 - 記録できるのは **Obsidian を開いている（プラグインが読み込まれている）間だけ** です。Obsidian を閉じている間の操作は追跡されません。

@@ -98,16 +98,6 @@ export class TimemeterView extends ItemView {
 	private pauseBtnEl: HTMLButtonElement | null = null;
 	private errbarEl: HTMLElement | null = null;
 
-	// ── ライブブロック
-	private nowDotEl: HTMLElement | null = null;
-	private nowAppEl: HTMLElement | null = null;
-	private nowMinEl: HTMLElement | null = null;
-	private nowSecEl: HTMLElement | null = null;
-	private nowSubAfkEl: HTMLElement | null = null;
-	private nowSubPauseEl: HTMLElement | null = null;
-	private todayTotalValEl: HTMLElement | null = null;
-	private quickInputEl: HTMLInputElement | null = null;
-
 	// ── サブタブ（合計/時系列）
 	private subtabBarsBtn: HTMLButtonElement | null = null;
 	private subtabLanesBtn: HTMLButtonElement | null = null;
@@ -275,42 +265,11 @@ export class TimemeterView extends ItemView {
 		this.tipEl = root.createDiv({ cls: "tip" });
 	}
 
-	/** 「今日」タブの中身（ライブブロック・サブタブ・合計/時系列）を組み立てる。 */
+	/** 「今日」タブの中身（サブタブ・合計/時系列）を組み立てる。
+	 *  ライブブロック（NOW・経過時間・今日合計・クイック入力）は撤去済み。記録状態はヘッダーの
+	 *  ピルで、現在アプリの状況は時系列/合計で確認する。現在セッションへのメモは ⌘⇧T や
+	 *  合計バー/時系列セグメントのクリックから行う。 */
 	private buildTodayView(container: HTMLElement): void {
-		// ── live ブロック
-		const live = container.createDiv({ cls: "live" });
-		live.createDiv({ cls: "now-label", text: t("live.now") });
-		const nowApp = live.createDiv({ cls: "now-app" });
-		this.nowDotEl = nowApp.createSpan({ cls: "appdot" });
-		this.nowAppEl = nowApp.createEl("b", { text: t("common.dash") });
-		const nowElapsed = live.createDiv({ cls: "now-elapsed" });
-		this.nowMinEl = nowElapsed.createSpan({ text: t("common.dash") });
-		nowElapsed.createEl("small", { text: t("live.min") });
-		this.nowSecEl = nowElapsed.createEl("small", { cls: "now-sec" });
-		this.nowSubAfkEl = live.createDiv({ cls: "now-sub afk", text: t("live.idle") });
-		this.nowSubPauseEl = live.createDiv({ cls: "now-sub pause", text: t("live.paused") });
-		const total = live.createDiv({ cls: "today-total" });
-		total.createSpan({ cls: "lbl", text: t("live.todayTotal") });
-		this.todayTotalValEl = total.createSpan({ cls: "val", text: "0m" });
-
-		this.quickInputEl = live.createEl("input", { cls: "quick-input", type: "text" });
-		this.quickInputEl.placeholder = t("live.quickPlaceholder");
-		this.quickInputEl.addEventListener("keydown", (ev: KeyboardEvent) => {
-			if (ev.key !== "Enter") return;
-			ev.preventDefault();
-			const value = this.quickInputEl?.value ?? "";
-			const trimmed = value.trim();
-			if (!trimmed) return;
-			void (async () => {
-				await this.host.setCurrentNote(trimmed);
-				if (this.quickInputEl) this.quickInputEl.value = "";
-				await this.refresh();
-				new Notice(t("notice.noteSaved"));
-			})();
-		});
-
-		container.createEl("hr", { cls: "rule" });
-
 		// ── サブタブ（合計/時系列）＋ 未記入バッジ
 		const subtabsRow = container.createDiv({ cls: "subtabs-row" });
 		const subtabs = subtabsRow.createDiv({ cls: "subtabs" });
@@ -440,40 +399,14 @@ export class TimemeterView extends ItemView {
 		else if (this.activeTab === "month") void this.refreshMonth();
 	}
 
-	/** 1 秒ごと: 状態ピル・一時停止ボタン・errbar・経過分秒・AFK/一時停止サブ行を更新する（I/O なし）。 */
+	/** 1 秒ごと: 状態ピル・一時停止ボタン・errbar を更新する（I/O なし）。
+	 *  ライブブロック（NOW・経過時間・クイック入力）は撤去したので更新対象はヘッダーのみ。 */
 	private updateLive(): void {
 		const state = this.host.getState();
 		this.contentEl.setAttr("data-state", state);
 		if (this.pillLabelEl) this.pillLabelEl.setText(stateLabel(state));
 		if (this.pauseBtnEl) setIcon(this.pauseBtnEl, state === "pause" ? "play" : "pause");
 		if (this.errbarEl) this.errbarEl.style.display = state === "err" ? "block" : "none";
-
-		const app = this.host.getCurrentApp();
-		const start = this.host.getCurrentStart();
-		if (this.nowAppEl) this.nowAppEl.setText(app ?? t("common.dash"));
-		if (this.nowDotEl) this.nowDotEl.style.background = app ? appColor(app) : "transparent";
-
-		// 経過分秒は記録中（rec）のときだけ更新する。AFK/一時停止/エラー中は最後に
-		// 表示していた値のまま止め、CSS の減光（opacity）だけで「止まっている」ことを示す。
-		if (state === "rec" && app && start != null) {
-			const elapsedMs = Date.now() - start;
-			const wholeMin = Math.max(0, Math.floor(elapsedMs / 60000));
-			const sec = Math.floor((elapsedMs % 60000) / 1000);
-			this.nowMinEl?.setText(String(wholeMin));
-			this.nowSecEl?.setText(`${String(sec).padStart(2, "0")}${t("live.secSuffix")}`);
-		} else if (!app) {
-			// 現在アプリが無い（モバイル／トラッカー未起動）: プレースホルダのまま。
-			this.nowMinEl?.setText(t("common.dash"));
-			this.nowSecEl?.setText("");
-		}
-
-		if (this.quickInputEl) {
-			const enabled = !!app;
-			this.quickInputEl.disabled = !enabled;
-			this.quickInputEl.placeholder = enabled
-				? t("live.quickPlaceholder")
-				: t("live.quickDisabled");
-		}
 	}
 
 	/**
@@ -488,7 +421,6 @@ export class TimemeterView extends ItemView {
 		const app = this.host.getCurrentApp();
 		this.liveSessionKey = app ? this.pickLatestKey(sessions, app) : null;
 
-		this.updateTodayTotal(sessions);
 		this.renderBars(this.barsEl, sessions, t("bars.emptyToday"), this.currentDate);
 		this.renderLanes(this.lanesEl, sessions, {
 			date: this.currentDate,
@@ -512,11 +444,6 @@ export class TimemeterView extends ItemView {
 			if (!best || toMin(s.start) > toMin(best.start)) best = s;
 		}
 		return best ? sessionKey(best) : null;
-	}
-
-	private updateTodayTotal(sessions: Session[]): void {
-		const total = sessions.reduce((sum, s) => sum + (this.host.isHidden(s.app) ? 0 : durMin(s)), 0);
-		this.todayTotalValEl?.setText(fmtDur(total));
 	}
 
 	/** ◀/▶: dayViewDate を ±1 日する。未来日（今日より後）へは進めない。 */

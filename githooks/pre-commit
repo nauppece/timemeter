@@ -1,0 +1,30 @@
+#!/bin/sh
+# Block commits that would leak secrets or machine-specific personal paths.
+# Activated via: git config core.hooksPath githooks (done by `npm install`'s prepare script).
+# Bypass a false positive with: git commit --no-verify
+
+# Exclude the lock file and this hook dir itself (the hook contains the very
+# patterns it scans for, which would otherwise self-trigger).
+added=$(git diff --cached --no-color -U0 -- . ':(exclude)package-lock.json' ':(exclude)githooks/*' | grep '^+' | grep -v '^+++')
+fail=0
+
+flag() {
+	if printf '%s\n' "$added" | grep -Eiq "$1"; then
+		echo "✋ pre-commit: possible $2 in staged changes."
+		fail=1
+	fi
+}
+
+# Absolute home paths that embed a username (e.g. /Users/alice/…, /home/bob/…).
+flag '/Users/[A-Za-z0-9._-]+/|/home/[A-Za-z0-9._-]+/' "personal absolute path (username)"
+
+# Common API keys / tokens / private keys.
+flag 'sk-[A-Za-z0-9]{20}|sk-ant-|ghp_[A-Za-z0-9]{20}|github_pat_|AIza[0-9A-Za-z_-]{30}|xox[baprs]-|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|glpat-|hf_[A-Za-z0-9]{20}' "API key / token / private key"
+
+if [ "$fail" = 1 ]; then
+	echo ""
+	echo "Move it to a gitignored local file (e.g. deploy.local.sh) or an env var."
+	echo "If this is a false positive: git commit --no-verify"
+	exit 1
+fi
+exit 0
