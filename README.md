@@ -1,126 +1,100 @@
-# TimeMeter / タイムメーター (obsidian-timemeter)
+# TimeMeter (obsidian-timemeter)
 
-TimeMeter is a lightweight time tracker for Obsidian. On **macOS desktop** it automatically tracks the frontmost app (and, optionally, all open apps) and records your day as a Markdown table in your vault. A sidebar shows today / per-day / monthly views with an app-totals bar chart and a zoomable timeline. Click a bar or a timeline segment to jot down "what I was doing" — into the session's note, your daily note, or a recently-used file. It also drafts a daily report you can hand to an LLM to fill in.
+> 日本語版は [README.ja.md](README.ja.md) をご覧ください.
 
-**Platform:** Automatic tracking is **macOS-only** and works only while Obsidian is open. On mobile (iOS/iPadOS/Android) tracking is disabled, but you can still view the data (sidebar & embeds) and add manual logs. The UI is available in **English and Japanese** (English by default; switch in settings).
+TimeMeter is a lightweight time tracker for Obsidian. On **macOS desktop** it automatically tracks the frontmost app (and, optionally, every open app) and records your day as a Markdown table in your vault. A sidebar shows **today / per-day / monthly** views with an app-totals bar chart and a zoomable timeline. Click a bar or a timeline segment to jot down "what I was doing" — into the session's note, your daily note, or a recently-used file. It can also draft a daily report you can hand to an LLM to fill in.
 
-> **System commands (important):** To detect the frontmost app on desktop, TimeMeter runs macOS commands via `child_process` — `osascript` (frontmost app name / window title) and `ioreg` (idle time). These run **only when `Platform.isDesktopApp` is true** (never on mobile), use `execFile` (no shell) with **static arguments and static AppleScript** (no user input is interpolated), and **send nothing over the network** — all data stays in Markdown in your vault. See "権限（macOS）" below.
+The point isn't the automatic tracking itself — it's making it easy to leave a one-line note about *what* each session was for.
 
----
+**Platform:** Automatic tracking is **macOS-only** and works only while Obsidian is open. On mobile (iOS/iPadOS/Android) tracking is disabled, but you can still view the data (sidebar & embeds) and add manual logs. The UI is available in **English and Japanese** (English by default; switch it in settings).
 
-> 以下は日本語の説明です。UI は日英切替に対応（既定は英語）。
+> **⚠️ System commands (important).** To detect the frontmost app on desktop, TimeMeter runs macOS commands via `child_process` — `osascript` (frontmost app name / window title) and `ioreg` (idle time for AFK). These run **only when `Platform.isDesktopApp` is true** (never on mobile — `child_process` isn't even loaded there), use **`execFile` (no shell)** with **static arguments and a static AppleScript** (no user/vault data is interpolated, so there is no injection surface), only **read** system state, and **send nothing over the network** — everything is written to Markdown in your vault. See [Permissions (macOS)](#permissions-macos).
 
-最前面アプリを自動追跡して `TimeMeter/YYYY-MM-DD.md` に Markdown で記録する Obsidian プラグインです。
-「タップして一言メモ」で “そのセッションで何をしていたか” を残せるようにするのが主眼で、自動追跡そのものは主役ではありません。
+## Install
 
-## インストール / Install
+### 1. Community plugins (after review)
 
-### 1. コミュニティプラグイン経由（審査通過後）
+Settings → Community plugins → Browse → search for **"TimeMeter"** → Install → Enable. (Pending review at the time of writing.)
 
-> 現在は公式コミュニティストアへ申請予定です。承認されると以下で入ります。
+### 2. BRAT (beta / available now)
 
-Obsidian の 設定 → コミュニティプラグイン → 閲覧 で **「TimeMeter」** を検索 → インストール → 有効化。
+1. Install and enable **BRAT** (Obsidian42 - BRAT) from Community plugins.
+2. In BRAT, "Add Beta plugin" → `nauppece/timemeter`.
+3. Enable **TimeMeter** under Community plugins.
 
-### 2. BRAT 経由（ベータ／今すぐ入れる）
+### 3. Manual (release assets)
 
-1. コミュニティプラグインから **BRAT**（Obsidian42 - BRAT）をインストール・有効化。
-2. BRAT の "Add Beta plugin" に `nauppece/timemeter` を追加。
-3. 設定 → コミュニティプラグインで **TimeMeter** を有効化。
-
-### 3. 手動（Git / リリース）
-
-[Releases](https://github.com/nauppece/timemeter/releases) の最新版から `main.js` / `manifest.json` / `styles.css` の3つをダウンロードし、
-Vault の `<vault>/.obsidian/plugins/timemeter/` に置いて、設定 → コミュニティプラグインで有効化。
+Download `main.js`, `manifest.json`, and `styles.css` from the latest [Release](https://github.com/nauppece/timemeter/releases), put them in `<vault>/.obsidian/plugins/timemeter/`, and enable the plugin.
 
 ```sh
-# 開発者向け（ソースからビルドして自分の Vault に配置）
+# From source (build and deploy to your own vault)
 git clone https://github.com/nauppece/timemeter.git
 cd timemeter
 npm install
 export TIMEMETER_PLUGIN_DIR="/path/to/YourVault/.obsidian/plugins/timemeter"
-npm run deploy   # build して上記フォルダへ main.js/manifest.json/styles.css を配置
+npm run deploy   # builds, then copies main.js/manifest.json/styles.css to that folder
 ```
 
-> macOS で自動追跡を使うには、初回に **オートメーション**と**アクセシビリティ**の許可が必要です（後述）。許可するまではサイドバーに権限エラーが出ますが、閲覧・手動ログは動きます。
+> On macOS, tracking needs **Automation** and **Accessibility** permission the first time (see below). Until granted, the sidebar shows a permission error, but viewing and manual logging still work.
 
-- 自動追跡（最前面アプリ・任意でウィンドウタイトル・AFK 検知）ができるのは **macOS デスクトップ版のみ**。
-- 記録できるのは **Obsidian を開いている（プラグインが読み込まれている）間だけ** です。Obsidian を閉じている間の操作は追跡されません。
-- モバイル（iOS/iPadOS/Android）では自動追跡は行われませんが、データの閲覧（サイドバー・埋め込み）と手動ログの追加はできます。
+## What it does / doesn't do
 
-> **⚠️ システムコマンドの実行について（重要）**
-> 自動追跡のため、macOS デスクトップ版では `child_process` 経由で macOS 標準コマンドを実行します：
-> `osascript`（最前面アプリ名・ウィンドウタイトルの取得）と `ioreg`（無操作＝AFK 秒数の取得）。
-> 実行は `Platform.isDesktopApp` が真のときだけで、モバイルでは一切呼ばれません（`child_process` も読み込みません）。
-> 取得した情報（アプリ名・ウィンドウタイトル・アイドル秒）は Vault 内の Markdown に保存されるだけで、外部送信は行いません。
->
-> *This plugin runs macOS system commands (`osascript`, `ioreg`) via `child_process` on desktop to detect the frontmost app, window title, and idle time. It never runs on mobile and never sends data anywhere — everything is written to Markdown in your vault.*
+### Desktop (macOS)
 
-## できること / できないこと
+- **Automatic app tracking** (polling interval is configurable). By default it records **every app that has a window open on the desktop** in parallel (so concurrent work is captured); set `captureAllApps` off to record only the frontmost app.
+- **AFK is ignored by default**, so recording never breaks while you watch a video or read. Turn **"Detect away (AFK)"** on and idle time is kept but shown **dimmed as "away"** on the timeline (still counted in totals; threshold defaults to 10 minutes).
+- Records the **window title** (frontmost app only) — used for hover details and the LLM report draft.
+- Sidebar: **Today** (live state, per-app bars, timeline, quick actions), **Day** (step through past days), **Month** (heatmap; click a day to open it).
+- Click an app bar → a modal lets you **pick a destination** (daily note first, then recently-used files) and type "what I was doing"; it appends `- App: text` to the chosen file.
+- Click an empty timeline segment → the same destination picker, defaulting to **"This record's note"** (fills the session's description column).
+- Quick commands: **note the current session**, **add a manual log**, **lap** (start a new task from here).
+- Status-bar item (current app, elapsed minutes, today's total; click to open the panel).
+- `timemeter` code-block **embed**.
+- Insert a **daily-report draft** into your daily note, and **copy an LLM prompt** to fill empty descriptions.
 
-### デスクトップ (macOS)
+### Mobile
 
-- アプリの自動追跡（ポーリング間隔は設定で変更可能）。既定では**デスクトップに開いている全アプリを並行して記録**します（同時作業も残せる。設定 `captureAllApps` で最前面のみに切替可）
-- **既定では AFK（無操作）を無視して途切れず記録**します。動画視聴や読書で入力が無くても記録が続きます。設定「離席（AFK）検知」を ON にすると、無操作の時間を止めずに**時系列で「離席」として薄色表示**します（合計には含む・しきい値は既定10分）
-- ウィンドウタイトルも記録（**最前面アプリのみ**取得。日報の Claude 補完やホバー詳細に使う）
-- サイドバー: 今日タブ（ライブ状態・アプリ別バー・時系列レーン・クイック入力）／日別タブ（前後日切替）／月タブ（ヒートマップ・日クリックで日別へ）
-- 合計バーのアプリをクリック → モーダルで **「追記先」を選択**（先頭=デイリー／その下に最近使ったファイル）し、「何をしていたか」を入力 → 選んだファイルに `- アプリ: 内容` を追記。デイリーは設定の見出し（既定 `## ✅ やったこと`）に、それ以外のファイルはファイル末尾に入る。デイリーのフォルダ/日付書式は Obsidian コアの「デイリーノート」設定に追随（未設定時は `デイリー`/`YYYY-MM-DD (ddd)`）。対象ファイルが無ければ通知のみ
-- 時系列レーンの空セグメントをクリック → 同じ「追記先」ピッカー付きモーダル。既定は **「この記録の説明」**（データファイルの説明列を埋める＝従来動作）で、デイリーや最近使ったファイルにも切り替えて追記できる
-- クイックログ3種: 「今のセッションにメモ」（⌘⇧T）／「手動ログを追加」／「ラップ（ここから別作業）」
-- ステータスバー表示（現在アプリ・経過分・今日の合計、クリックでパネルを開く）
-- `timemeter` コードブロックの埋め込み
-- 日報下書きのデイリーへの挿入、Claude 用プロンプトのコピー
+- View data in the sidebar (Today/Day/Month) — but with no automatic tracking, "Today" only shows what you logged manually that day.
+- Render `timemeter` embeds.
+- Add manual logs.
+- **No automatic tracking** (no frontmost-app / AFK detection); the "note current session" and "lap" commands are hidden.
 
-### モバイル
+### Limitations
 
-- サイドバーでのデータ閲覧（今日/日別/月タブとも動作。ただし自動追跡が無いため「今日」はその日に手動ログした分のみ表示）
-- `timemeter` 埋め込みの表示
-- 「手動ログを追加」コマンドでの記録
-- **自動追跡（最前面アプリ検知・AFK 検知）はできません。**「今のセッションにメモ」「ラップ」コマンドも表示されません（後述のコマンド一覧を参照）。
+- Automatic tracking only runs while desktop Obsidian is open; nothing is recorded while Obsidian is closed or the machine is asleep.
+- It only tracks *which app is frontmost*, not what you do inside an app.
 
-### 共通の制約
+## Permissions (macOS)
 
-- 自動追跡はデスクトップ版 Obsidian が起動している間だけ動きます。Obsidian を閉じた/スリープした期間は記録されません。
-- 追跡対象は「最前面アプリが何か」だけで、アプリ内の詳細な操作までは見ていません。
+Because tracking asks *System Events* via `osascript`, macOS asks for permission the first time:
 
-## 権限（macOS）
+1. **Automation** (required for the frontmost app name). A dialog appears on first tracking. If it doesn't, or you declined, enable it under `System Settings → Privacy & Security → Automation → Obsidian → System Events`.
+2. **Accessibility** (required for the window title): `System Settings → Privacy & Security → Accessibility → Obsidian`. Without it, app names are still recorded — only titles stay empty.
 
-自動追跡は `osascript` 経由で System Events に問い合わせる方式のため、初回に以下の許可が必要です。
+If permission is missing or denied, the detection functions swallow the error and return `null`, so Obsidian never crashes or shows an error — the session simply isn't recorded, or the title is empty. Idle detection uses `ioreg -c IOHIDSystem` and needs no extra permission.
 
-1. **オートメーション許可**（最前面アプリ名の取得に必須）
-   初回追跡時にダイアログが出ます。出なかった/誤って拒否した場合は
-   `システム設定 → プライバシーとセキュリティ → オートメーション → Obsidian → System Events` を ON にしてください。
-2. **アクセシビリティ許可**（ウィンドウタイトルの取得に必須）
-   `システム設定 → プライバシーとセキュリティ → アクセシビリティ → Obsidian` を ON にしてください。
-   この権限が無くても（＝タイトルは空のまま）アプリ名の記録は続きます。
+## Commands
 
-権限が無い/拒否された場合、`getFrontmostApp`/`getWindowTitle` は例外を握りつぶして `null` を返すだけなので、Obsidian がクラッシュしたりエラーが表示されたりすることはありません（単に記録されない、またはタイトルが空になるだけです）。
+Run from the command palette (`Cmd/Ctrl+P`). The full palette id is `timemeter:<id>`.
 
-アイドル検知（AFK）は `ioreg -c IOHIDSystem` を使っており、追加の権限は不要です。
-
-## コマンド一覧
-
-コマンドパレット（`Cmd+P`）から実行できます。id は `main.ts` に登録されているものそのままです。
-
-| コマンド名 | id | 実行可否 |
+| Command | id | Availability |
 |---|---|---|
-| タイムメーター: パネルを開く | `timemeter-open-view` | デスクトップ・モバイル両方 |
-| タイムメーター: 今すぐ集計 | `timemeter-aggregate-now` | デスクトップ・モバイル両方（※モバイルは自動追跡データが無いため実質何も起きません） |
-| タイムメーター: 今のセッションにメモ（⌘⇧T） | `timemeter-note-current` | **デスクトップのみ**。かつ現在追跡中のアプリがある時だけコマンドパレット/ホットキーに表示されます |
-| タイムメーター: 手動ログを追加 | `timemeter-manual-log` | デスクトップ・モバイル両方 |
-| タイムメーター: ラップ（ここから別作業） | `timemeter-lap` | **デスクトップのみ** |
-| タイムメーター: デイリーに今日のタイムメーターを挿入 | `timemeter-insert-daily-embed` | デスクトップ・モバイル両方 |
-| タイムメーター: 日報の下書きをデイリーに挿入 | `timemeter-insert-nippou-draft` | デスクトップ・モバイル両方 |
-| タイムメーター: Claude 用プロンプトをコピー | `timemeter-copy-claude-prompt` | デスクトップ・モバイル両方 |
+| Open panel | `open-view` | Desktop & mobile |
+| Aggregate now | `aggregate-now` | Desktop & mobile (a no-op on mobile — no tracking data) |
+| Note current session | `note-current` | **Desktop only**, and only shown while an app is being tracked |
+| Add manual log | `manual-log` | Desktop & mobile |
+| Lap (new task from here) | `lap` | **Desktop only** |
+| Insert today's TimeMeter into the daily note | `insert-daily-embed` | Desktop & mobile |
+| Insert daily-report draft into the daily note | `insert-nippou-draft` | Desktop & mobile |
+| Copy prompt for an LLM | `copy-claude-prompt` | Desktop & mobile |
 
-補足:
-- 「今すぐ集計」「デイリーに挿入」「日報下書き挿入」「Claude プロンプトコピー」はプラットフォームによる無効化はしていませんが、自動追跡データが無いモバイルでは「今すぐ集計」は実質ノーオペレーションです（ポーリングデータが無ければ何も書き込まれません）。
-- リボンアイコン（砂時計）からもパネルを開けます。
+No default hotkeys are set (they can conflict with other plugins); assign your own under Settings → Hotkeys. You can also open the panel from the ribbon (hourglass) icon.
 
-## データ形式
+## Data format
 
-記録先は `<データフォルダ>/YYYY-MM-DD.md`（データフォルダは既定で `タイムメーター`、設定で変更可）。
+Records are stored at `<data folder>/YYYY-MM-DD.md` (data folder defaults to `TimeMeter`, configurable).
 
-### frontmatter
+### Frontmatter
 
 ```yaml
 ---
@@ -132,116 +106,98 @@ totals:
 ---
 ```
 
-- `date` / `total_min` / `totals` の3キーのみプラグインが管理します。既存の frontmatter に他のキーがあっても保持されます（この3キーだけ差し替え）。
-- `totals` はアプリ名ごとの合計分。
+Only `date` / `total_min` / `totals` are managed by the plugin; any other frontmatter keys you add are preserved (only these three are replaced). `totals` is minutes per app.
 
-### セッション表
+### Session table
 
-本文中の以下のマーカーの間に Markdown テーブルとして書かれます。
+Written as a Markdown table between markers in the body:
 
 ```
 <!-- timemeter:sessions:start -->
 | 開始 | 終了 | 時間 | アプリ | タイトル | 説明 | 離席 |
 |------|------|------|--------|----------|------|------|
-| 09:00 | 10:15 | 1h 15m | Obsidian | note.md — Vault | 資料整理 |  |
+| 09:00 | 10:15 | 1h 15m | Obsidian | note.md — Vault | Organized docs |  |
 <!-- timemeter:sessions:end -->
 ```
 
-列は **開始 / 終了 / 時間 / アプリ / タイトル / 説明 / 離席** の7列です（「手動」専用の列はありません。手動ログはアプリ列が `✍️ 手動` になっている行として区別されます）。**離席**列は AFK 検知 ON のとき無操作区間に `1` が入ります（表示の色分け用。合計には含みます）。旧6列（離席列なし）のファイルもそのまま読めます（次回書き込み時に7列へ更新）。
+Columns are **start / end / duration / app / title / note / away** (the headers are in Japanese). There is no dedicated "manual" column — manual logs are rows whose app is `✍️ 手動`. The **away** column holds `1` for idle spans when AFK detection is on (for the dimmed display; still counted in totals). Older 6-column files (no away column) still read fine and are upgraded on the next write.
 
-- マーカー外の本文（見出しやメモなど）はプラグインが一切変更しません。
-- セルの中の `|` は `\|` に、改行は `<br>` にエスケープされます。
-- **再集計してもデータは失われません**: 再集計時は「開始HH:MM｜アプリ名」をキーに既存行と新しい行をマージします。両方に同じキーがあれば終了時刻・タイトルは新しい値を採用しつつ、**説明列は新しい方が空なら既存の説明を残します**。手動ログなど新しい集計に含まれない行（キーがどちらか片方にしかない行）もそのまま保持されます。
+- The plugin never touches text outside the markers (headings, your own notes, etc.).
+- In cells, `|` is escaped to `\|` and newlines to `<br>`; the managed-marker comment is neutralized if it ever appears inside a title.
+- **Re-aggregating never loses data.** Rows are merged by `startHH:MM|app`: when a key exists in both, the new end/title win but the **note is kept if the new one is empty**; rows that only exist in the file (e.g. manual logs) are preserved.
 
-## Claude 連携ワークフロー
+## LLM workflow
 
-「タイムメーター: Claude 用プロンプトをコピー」を実行すると、以下のようなプロンプトがクリップボードにコピーされます（API キーは不要。Claude Code などに当日のデータファイルを渡して使う想定です）。
+The "Copy prompt for an LLM" command copies a prompt like this to the clipboard (no API key needed — hand it to Claude Code or similar together with the day's file):
 
 ```
-`タイムメーター/2026-07-09.md` の説明が空のセッションについて、時間帯とアプリ・ウィンドウタイトルから内容を推測して説明列を埋めて。既にある説明は変更しないで。
+For sessions with an empty description in `TimeMeter/2026-07-09.md`, infer the
+activity from the time range, app, and window title, and fill in the description
+column. Do not change descriptions that already exist.
 ```
 
-Claude Code 等でこのプロンプトと一緒に当日のファイルを渡すと、説明が空のセッションだけ埋めてもらえます（既に説明が入っている行は変更しない前提の指示になっています）。
+## Settings
 
-## 設定
+Settings → TimeMeter.
 
-設定タブ（プラグイン設定 → タイムメーター）で変更できます。
-
-| 設定 | キー | 既定値 | 範囲 |
+| Setting | key | Default | Range |
 |---|---|---|---|
-| 言語 / Language | `lang` | `en` | English / 日本語 |
-| ポーリング間隔（秒） | `pollIntervalSec` | 10 | 5〜60（5刻み） |
-| 離席（AFK）検知 | `afkDetect` | false | OFF＝無操作でも記録／ON＝無操作を離席として色分け |
-| 離席とみなす時間（分） | `afkThresholdSec` | 600（10分） | 1〜30分（`afkDetect` ON 時のみ有効） |
-| 結合ギャップ（分） | `mergeGapMin` | 3 | 1〜10（1刻み） |
-| 開いている全アプリを記録 | `captureAllApps` | true | ON/OFF（OFF で最前面のみ） |
-| データフォルダ | `dataFolder` | `TimeMeter` | 任意の文字列（空欄は既定値に戻ります） |
-| デイリーの見出し | `dailyHeading` | `## ✅ やったこと` | 追記・埋め込み・日報の挿入先見出し（空欄ならファイル末尾） |
-| ステータスバー表示 | `showStatusBar` | true | ON/OFF |
-| 起動時にサイドバーを開く | `showSidebarOnStart` | true | ON/OFF |
-| アプリ別ルール（表示/除外） | `apps[アプリ名]` | 未観測アプリは自動登録時に `{ hidden: false }` | アプリごとに表示/除外を切替（目のアイコン。除外＝時系列・合計から消す） |
+| Language | `lang` | `en` | English / 日本語 |
+| Polling interval (sec) | `pollIntervalSec` | 10 | 5–60 (step 5) |
+| Detect away (AFK) | `afkDetect` | false | Off = keep recording; On = mark idle as "away" |
+| Away threshold (min) | `afkThresholdSec` | 600 (10 min) | 1–30 min (only when `afkDetect` is on) |
+| Merge gap (min) | `mergeGapMin` | 3 | 1–10 (step 1) |
+| Track all open apps | `captureAllApps` | true | On/Off (Off = frontmost only) |
+| Data folder | `dataFolder` | `TimeMeter` | any string (blank resets to default) |
+| Daily-note heading | `dailyHeading` | `## ✅ やったこと` | where appends/embeds/report drafts go (blank = end of file) |
+| Show status bar | `showStatusBar` | true | On/Off |
+| Open sidebar on startup | `showSidebarOnStart` | true | On/Off |
+| Per-app rules (show/exclude) | `apps[name]` | new apps auto-register as `{ hidden: false }` | toggle show/exclude per app (excluded = removed from timeline & totals) |
 
-ポーリング間隔・AFK しきい値・「開いている全アプリを記録」を変更すると、内部でトラッカーが再起動されます（二重ポーリングにはなりません）。
+Changing the polling interval, AFK settings, or "Track all open apps" restarts the internal tracker (no double polling).
 
-### 開いている全アプリを記録（並行トラッキング）
+### Track all open apps (parallel tracking)
 
-`captureAllApps`（既定 ON）では、毎ポーリング時に**最前面のアプリだけでなく、デスクトップにウィンドウを開いている全アプリ**（`osascript` の `every process whose visible is true`）を記録します。動画を見ながらコードを書くといった**同時作業も時間として残せます**。
+With `captureAllApps` (default on), each poll records **every app with a window open on the desktop** (`osascript`'s `every process whose visible is true`), not just the frontmost one — so concurrent work (e.g. coding while watching a video) is all captured.
 
-- **合計は実時間（ウォールクロック）を超えることがあります。** 6個のアプリを1時間開いていれば、各アプリに約1時間ずつ付くため、合計は最大6時間になります。時系列レーンではアプリごとの帯が**時間帯を重ねて**表示されます。これはこのモードの仕様です。
-- 記録されるのは**操作中（非AFK）の間だけ**です。離席（AFK）中はどのアプリも記録されません。
-- タイトルは**最前面アプリのみ**取得します（背景アプリは空）。
-- Finder など常に開いているアプリも対象になるので、不要なものは「アプリ別ルール」で除外してください（除外機能と相性が良い）。
-- OFF にすると従来どおり**最前面アプリのみ**を記録します（合計＝実際に前面で使った時間）。
+- **Totals can exceed wall-clock time.** Six apps open for an hour add ~1 hour each, so the total can be up to six hours; on the timeline, app lanes overlap in time. This is by design for this mode.
+- Only recorded **while you're active** (not AFK).
+- Titles are captured for the **frontmost app only** (background apps have empty titles).
+- Always-open apps like Finder are included, so exclude the ones you don't care about via per-app rules.
+- Off = only the frontmost app is recorded (total = time actually spent in front).
 
-### 言語（日英切替）
+### Language (EN/JA)
 
-`lang` を English / 日本語で切り替えられます（既定は英語）。パネル内 UI・通知・設定・ステータスバーは切替後に即反映されます。ただし **コマンドパレットの項目名・リボンのツールチップ・プラグイン一覧の名前（`manifest.json` の `name`＝`TimeMeter` に固定）は Obsidian の仕様上、登録時の言語で固定** されるため、変更を反映するには Obsidian のリロード（またはプラグインの無効化→有効化）が必要です。
+Switch `lang` between English and 日本語 (English by default). The panel UI, notices, settings, and status bar update immediately. However **command names, the ribbon tooltip, and the plugin name in the list are fixed at registration time** by Obsidian, so a reload (or disable→enable) is needed to change those.
 
-### アプリの除外（表示から消す）
+### Excluding an app
 
-設定タブの「アプリ別ルール」で各アプリの「表示」を OFF にすると、そのアプリ（例: LINE など「何時間使ってもよい」もの）を **時系列レーン・合計バー・今日合計・月ヒートマップ・日報の全てから完全に除外** します（合計バーに「—」行も残りません）。除外中のアプリは設定の上部にまとめて表示され、いつでも解除できます。**記録データ（`.md`）は残る** ため、後から再表示すれば過去分も戻ります。サイドバーの ⋯／右クリックメニューからも個別に非表示にできます（再表示は設定から）。
+Turn an app's "show" off in per-app rules to **remove it entirely from the timeline, bars, today's total, the month heatmap, and the report** (e.g. a chat app you don't want to count). Excluded apps are grouped at the top of settings and can be re-enabled anytime; the recorded data (`.md`) is kept, so past days come back if you re-enable it. You can also exclude an app from the sidebar's ⋯ / right-click menu (re-enable from settings).
 
-### 時系列レーンの拡大縮小・スクロール
+### Zooming & scrolling the timeline
 
-時系列（レーン）表示の上部に `− / {倍率} / +` があり、1x〜4x で横方向にズームできます。拡大するとレーンがはみ出し、**横スクロール**（トラックパッド・Shift+ホイール・スクロールバー・ドラッグでのパン）で時間帯を移動できます。ズーム時はビューポート中央の時刻を保ちます。アプリ名の列は左に固定表示されます。ズーム倍率はセッション内のみ保持され、パネルを開き直すと 1x に戻ります（保存はしません）。「今日」タブと「日別」タブでズームは独立しています。
+The timeline has a `− / {zoom} / +` control (1x–4x). Zooming in makes lanes overflow; scroll horizontally (trackpad, Shift+wheel, scrollbar, or drag to pan) to move through the day. The centered time is kept while zooming, the app-name column stays pinned on the left, and zoom is per-session (resets to 1x when you reopen the panel; independent for Today vs. Day).
 
-## 埋め込み
+## Embeds
 
-ノートに以下のように書くと、その日の合計時間とアプリ別バー・時系列の1本帯が描画されます（読み取り専用・モバイルでも表示可）。
+Write this in a note to render that day's total, per-app bars, and a single-strip timeline (read-only; works on mobile too):
 
+````
 ```timemeter
 date: today
 ```
+````
 
-`date` には `today` または `YYYY-MM-DD` を指定できます（省略・空・不正な値は `today` 扱い）。
+`date` accepts `today` or `YYYY-MM-DD` (missing/empty/invalid values fall back to `today`).
 
-## 開発
+## Development
 
 ```sh
-npm run dev     # esbuild watch（main.js を出力）
-npm run build   # tsc --noEmit + esbuild production ビルド
-npm test        # vitest run（67テスト）
-npm run deploy  # build 後、deploy.sh でこの環境の vault の .obsidian/plugins/timemeter へ main.js/manifest.json/styles.css を配置
+npm run dev     # esbuild watch (outputs main.js)
+npm run build   # tsc --noEmit + esbuild production build
+npm test        # vitest run (83 tests)
+npm run deploy  # build, then deploy.sh copies main.js/manifest.json/styles.css to
+                # the folder in TIMEMETER_PLUGIN_DIR (see Install)
 ```
 
-開発はこのリポジトリ（iCloud 外）で行い、vault へはビルド成果物（`main.js` / `manifest.json` / `styles.css`）のみを配置します。`deploy.sh` は現在この環境の vault パスに直書きされているため、他環境で使う場合はパスの書き換えが必要です。
-
-## E2E チェックリスト
-
-実機で手動確認する想定のチェックリストです（このリポジトリのテストでは自動化していません）。
-
-- [ ] 追跡開始→数分後「今すぐ集計」→当日ファイルが生成される
-- [ ] `captureAllApps` ON で、前面にしていない開きっぱなしのアプリも時系列・合計に出る（時間帯が重なる）／OFF で最前面のみに戻る
-- [ ] ⌘⇧T で現行セッションに説明が入る／再集計しても説明が消えない
-- [ ] 時系列レーンの空セグメントをクリックで穴埋め→説明が入る
-- [ ] 合計バーのアプリをクリック→モーダル内で追記先（デイリー＋最近使ったファイル）を選び入力→追加で選んだファイルに `- アプリ: 内容` が入る（デイリー=やったこと欄／他=末尾）／デイリーのパスがコア設定に追随する
-- [ ] 手動ログ追加（デスクトップ＆モバイル）
-- [ ] ラップで区切りが入る
-- [ ] アプリ別ルールの目のアイコンで除外にすると時系列・合計の両方から完全に消える（「—」行も出ない・データは残る）／設定上部の除外グループから戻せる
-- [ ] 言語を日本語↔English で切り替え→パネル・通知・設定・ステータスバーが即反映される（コマンド名・リボンはリロードで反映）
-- [ ] 時系列レーンを ＋/− で 1x〜4x にズーム→はみ出しを横スクロール/ドラッグで移動できる／アプリ名列が左に固定される／中央の時刻が保たれる
-- [ ] 日別◀▶ / 月ヒートマップ / 日クリックで日別へ遷移する
-- [ ] ステータスバー表示・クリックでサイドバーが開く
-- [ ] `timemeter` 埋め込みが描画される（`today` / 日付指定の両方）
-- [ ] 日報下書き挿入 / Claude 用プロンプトコピーが動く
-- [ ] ダーク/ライト両テーマで表示が崩れない
+Development happens in this repo; only the build artifacts (`main.js` / `manifest.json` / `styles.css`) go into a vault. `deploy.sh` reads the destination from `TIMEMETER_PLUGIN_DIR` (optionally via a gitignored `deploy.local.sh`), so it works on any machine. Releases are built and signed with build-provenance attestations by GitHub Actions when a version tag is pushed. A pre-commit hook (`githooks/pre-commit`, enabled by `npm install`) blocks commits containing personal absolute paths or API keys.
