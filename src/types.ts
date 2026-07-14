@@ -32,7 +32,7 @@ export interface TimemeterSettings {
 	mergeGapMin: number; // 3
 	captureAllApps: boolean; // true: 開いている全アプリを並行記録 / false: 最前面のみ
 	dataFolder: string; // 記録先フォルダ（既定 "TimeMeter"）
-	dailyHeading: string; // デイリーの追記/挿入先の見出し（空なら末尾）。既定 "## ✅ やったこと"
+	dailyHeading: string; // デイリーの追記/挿入先の見出し（空なら末尾）。既定 "## TimeMeter"
 	apps: Record<string, AppRule>;
 	showStatusBar: boolean;
 	showSidebarOnStart: boolean;
@@ -46,7 +46,7 @@ export const DEFAULT_SETTINGS: TimemeterSettings = {
 	mergeGapMin: 3,
 	captureAllApps: true,
 	dataFolder: "TimeMeter",
-	dailyHeading: "## ✅ やったこと",
+	dailyHeading: "## TimeMeter",
 	apps: {},
 	showStatusBar: true,
 	showSidebarOnStart: true,

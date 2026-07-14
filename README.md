@@ -149,7 +149,7 @@ Settings → TimeMeter.
 | Merge gap (min) | `mergeGapMin` | 3 | 1–10 (step 1) |
 | Track all open apps | `captureAllApps` | true | On/Off (Off = frontmost only) |
 | Data folder | `dataFolder` | `TimeMeter` | any string (blank resets to default) |
-| Daily-note heading | `dailyHeading` | `## ✅ やったこと` | where appends/embeds/report drafts go (blank = end of file) |
+| Daily-note heading | `dailyHeading` | `## TimeMeter` | where appends/embeds/report drafts go (blank = end of file) |
 | Show status bar | `showStatusBar` | true | On/Off |
 | Open sidebar on startup | `showSidebarOnStart` | true | On/Off |
 | Per-app rules (show/exclude) | `apps[name]` | new apps auto-register as `{ hidden: false }` | toggle show/exclude per app (excluded = removed from timeline & totals) |

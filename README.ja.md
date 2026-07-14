@@ -139,7 +139,7 @@ totals:
 | 結合ギャップ（分） | `mergeGapMin` | 3 | 1〜10 |
 | 開いている全アプリを記録 | `captureAllApps` | true | ON/OFF（OFFで最前面のみ） |
 | データフォルダ | `dataFolder` | `TimeMeter` | 任意（空欄で既定に戻る） |
-| デイリーの見出し | `dailyHeading` | `## ✅ やったこと` | 追記/埋め込み/日報の挿入先（空欄で末尾） |
+| デイリーの見出し | `dailyHeading` | `## TimeMeter` | 追記/埋め込み/日報の挿入先（空欄で末尾） |
 | ステータスバー表示 | `showStatusBar` | true | ON/OFF |
 | 起動時にサイドバーを開く | `showSidebarOnStart` | true | ON/OFF |
 | アプリ別ルール（表示/除外） | `apps[アプリ名]` | 未観測は `{ hidden: false }` | アプリごとに表示/除外 |
