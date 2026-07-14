@@ -44,7 +44,6 @@ export class TimemeterSettingTab extends PluginSettingTab {
 				slider
 					.setLimits(5, 60, 5)
 					.setValue(plugin.settings.pollIntervalSec)
-					.setDynamicTooltip()
 					.onChange(async (value) => {
 						plugin.settings.pollIntervalSec = value;
 						await plugin.saveSettings();
@@ -72,7 +71,6 @@ export class TimemeterSettingTab extends PluginSettingTab {
 				slider
 					.setLimits(1, 30, 1)
 					.setValue(Math.round(plugin.settings.afkThresholdSec / 60))
-					.setDynamicTooltip()
 					.onChange(async (value) => {
 						plugin.settings.afkThresholdSec = value * 60;
 						await plugin.saveSettings();
@@ -87,7 +85,6 @@ export class TimemeterSettingTab extends PluginSettingTab {
 				slider
 					.setLimits(1, 10, 1)
 					.setValue(plugin.settings.mergeGapMin)
-					.setDynamicTooltip()
 					.onChange(async (value) => {
 						plugin.settings.mergeGapMin = value;
 						await plugin.saveSettings();

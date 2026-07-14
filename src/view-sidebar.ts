@@ -185,8 +185,8 @@ export class TimemeterView extends ItemView {
 		// データ（合計/時系列/バッジ）は開いた時＋約20秒ごと＋各編集後。
 		this.registerInterval(window.setInterval(() => void this.refresh(), 20000));
 
-		// コンテキストメニューは外側クリックで閉じる。
-		this.registerDomEvent(document, "click", (ev) => {
+		// コンテキストメニューは外側クリックで閉じる（ポップアウト対応で activeDocument を使う）。
+		this.registerDomEvent(activeDocument, "click", (ev) => {
 			if (this.ctxmenuEl && !this.ctxmenuEl.contains(ev.target as Node)) {
 				this.ctxmenuEl.removeClass("open");
 			}
@@ -630,11 +630,11 @@ export class TimemeterView extends ItemView {
 			more.setAttr("title", t("bars.more"));
 			more.addEventListener("click", (ev) => {
 				ev.stopPropagation();
-				this.openCtx(ev as MouseEvent, app);
+				this.openCtx(ev, app);
 			});
 			row.addEventListener("contextmenu", (ev) => {
 				ev.preventDefault();
-				this.openCtx(ev as MouseEvent, app);
+				this.openCtx(ev, app);
 			});
 		}
 	}
