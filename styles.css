@@ -485,7 +485,6 @@
 .tm-view .lane-scroll {
 	overflow-x: auto;
 	overflow-y: hidden;
-	scrollbar-width: thin;
 }
 .tm-view .lane-scroll.grabbing {
 	cursor: grabbing;
@@ -777,6 +776,9 @@
 .tm-statusbar {
 	cursor: pointer;
 }
+.tm-statusbar.tm-statusbar-hidden {
+	display: none;
+}
 .tm-statusbar:hover {
 	color: var(--text-normal);
 }
@@ -875,6 +877,19 @@
 .tm-app-excluded .setting-item-name {
 	color: var(--text-faint);
 	text-decoration: line-through;
+}
+
+/* ── QuickLogModal（.tm-view の外に出る） ── */
+.tm-modal-input {
+	width: 100%;
+}
+.tm-modal-buttons {
+	margin-top: 0.75em;
+	text-align: right;
+}
+/* 時系列の右端時刻ラベルは内側に寄せる（はみ出し防止） */
+.tm-view .lane-hours-track .hlabel.at-end {
+	transform: translateX(-100%);
 }
 
 /* ── 追記先モーダルの「追記先」ピッカー（QuickLogModal 内・.tm-view の外に出る） ── */

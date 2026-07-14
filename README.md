@@ -1,6 +1,14 @@
 # TimeMeter / タイムメーター (obsidian-timemeter)
 
-> UI は日英切替に対応（既定は英語）。以下の説明は日本語 UI を基準にしています。
+TimeMeter is a lightweight time tracker for Obsidian. On **macOS desktop** it automatically tracks the frontmost app (and, optionally, all open apps) and records your day as a Markdown table in your vault. A sidebar shows today / per-day / monthly views with an app-totals bar chart and a zoomable timeline. Click a bar or a timeline segment to jot down "what I was doing" — into the session's note, your daily note, or a recently-used file. It also drafts a daily report you can hand to an LLM to fill in.
+
+**Platform:** Automatic tracking is **macOS-only** and works only while Obsidian is open. On mobile (iOS/iPadOS/Android) tracking is disabled, but you can still view the data (sidebar & embeds) and add manual logs. The UI is available in **English and Japanese** (English by default; switch in settings).
+
+> **System commands (important):** To detect the frontmost app on desktop, TimeMeter runs macOS commands via `child_process` — `osascript` (frontmost app name / window title) and `ioreg` (idle time). These run **only when `Platform.isDesktopApp` is true** (never on mobile), use `execFile` (no shell) with **static arguments and static AppleScript** (no user input is interpolated), and **send nothing over the network** — all data stays in Markdown in your vault. See "権限（macOS）" below.
+
+---
+
+> 以下は日本語の説明です。UI は日英切替に対応（既定は英語）。
 
 最前面アプリを自動追跡して `TimeMeter/YYYY-MM-DD.md` に Markdown で記録する Obsidian プラグインです。
 「タップして一言メモ」で “そのセッションで何をしていたか” を残せるようにするのが主眼で、自動追跡そのものは主役ではありません。

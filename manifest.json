@@ -1,8 +1,8 @@
 {
   "id": "timemeter",
   "name": "TimeMeter",
-  "version": "0.1.5",
-  "minAppVersion": "1.5.0",
+  "version": "0.1.6",
+  "minAppVersion": "1.6.0",
   "description": "Time tracker that auto-tracks the frontmost app and records it to Markdown (macOS tracking; mobile viewing / manual logging).",
   "author": "nauppece",
   "authorUrl": "https://github.com/nauppece",

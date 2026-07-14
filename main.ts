@@ -84,25 +84,27 @@ export default class TimeMeterPlugin extends Plugin {
 		this.laps = this.laps.filter((l) => localDateStr(l) === today0);
 
 		// 右サイドバーのビューを登録し、リボンアイコン／コマンドから開けるようにする。
-		const plugin = this;
+		// getter は object-literal 内で this が host を指すため、live な settings 参照だけ束縛する
+		// （settings オブジェクトは onload 後に再代入されず、プロパティが in-place で更新される）。
+		const settings = this.settings;
 		const host: TimemeterHost = {
 			app: this.app,
 			get dataFolder() {
-				return plugin.settings.dataFolder;
+				return settings.dataFolder;
 			},
-			getState: () => plugin.trackerState,
-			getCurrentApp: () => plugin.tracker?.currentApp ?? null,
-			getCurrentStart: () => plugin.tracker?.currentStart ?? null,
-			aggregateNow: () => plugin.aggregateNow(),
-			togglePause: () => plugin.togglePause(),
-			openSettings: () => plugin.openSettings(),
-			setCurrentNote: (text) => plugin.setCurrentNote(text),
-			setSegmentNote: (date, key, text) => plugin.setSegmentNote(date, key, text),
-			appendDailyDone: (date, app, text) => plugin.appendDailyDone(date, app, text),
-			appendToFile: (path, app, text) => plugin.appendToFile(path, app, text),
-			dailyPath: (date) => plugin.dailyPathForDate(date),
-			isHidden: (app) => plugin.isHidden(app),
-			toggleHidden: (app) => plugin.toggleHidden(app),
+			getState: () => this.trackerState,
+			getCurrentApp: () => this.tracker?.currentApp ?? null,
+			getCurrentStart: () => this.tracker?.currentStart ?? null,
+			aggregateNow: () => this.aggregateNow(),
+			togglePause: () => this.togglePause(),
+			openSettings: () => this.openSettings(),
+			setCurrentNote: (text) => this.setCurrentNote(text),
+			setSegmentNote: (date, key, text) => this.setSegmentNote(date, key, text),
+			appendDailyDone: (date, app, text) => this.appendDailyDone(date, app, text),
+			appendToFile: (path, app, text) => this.appendToFile(path, app, text),
+			dailyPath: (date) => this.dailyPathForDate(date),
+			isHidden: (app) => this.isHidden(app),
+			toggleHidden: (app) => this.toggleHidden(app),
 		};
 		this.registerView(VIEW_TYPE_TIMEMETER, (leaf) => new TimemeterView(leaf, host));
 
@@ -113,7 +115,7 @@ export default class TimeMeterPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "timemeter-open-view",
+			id: "open-view",
 			name: t("cmd.openView"),
 			callback: () => {
 				void this.activateView();
@@ -168,9 +170,9 @@ export default class TimeMeterPlugin extends Plugin {
 		const embedHost: EmbedHost = {
 			app: this.app,
 			get dataFolder() {
-				return plugin.settings.dataFolder;
+				return settings.dataFolder;
 			},
-			isHidden: (app) => plugin.isHidden(app),
+			isHidden: (app) => this.isHidden(app),
 		};
 		this.registerMarkdownCodeBlockProcessor("timemeter", (source, el) => {
 			const dateStr = parseEmbedDate(source, todayStr());
@@ -178,7 +180,7 @@ export default class TimeMeterPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "timemeter-insert-daily-embed",
+			id: "insert-daily-embed",
 			name: t("cmd.insertDailyEmbed"),
 			callback: () => {
 				void this.insertDailyEmbed();
@@ -186,7 +188,7 @@ export default class TimeMeterPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "timemeter-aggregate-now",
+			id: "aggregate-now",
 			name: t("cmd.aggregateNow"),
 			callback: () => {
 				void this.aggregateNow();
@@ -194,7 +196,7 @@ export default class TimeMeterPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "timemeter-insert-nippou-draft",
+			id: "insert-nippou-draft",
 			name: t("cmd.insertNippou"),
 			callback: () => {
 				void this.insertNippouDraft();
@@ -202,7 +204,7 @@ export default class TimeMeterPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "timemeter-copy-claude-prompt",
+			id: "copy-claude-prompt",
 			name: t("cmd.copyClaudePrompt"),
 			callback: () => {
 				void this.copyClaudePrompt();
@@ -211,9 +213,9 @@ export default class TimeMeterPlugin extends Plugin {
 
 		// クイックログ（タップ記録）: 3コマンド。
 		this.addCommand({
-			id: "timemeter-note-current",
+			id: "note-current",
 			name: t("cmd.noteCurrent"),
-			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "T" }],
+			// デフォルトのホットキーは付けない（他プラグイン/本体と衝突し得るため。ユーザーが任意に割当）。
 			// デスクトップかつ現在追跡中のアプリがある時だけコマンドパレット/ホットキーに出す。
 			checkCallback: (checking: boolean) => {
 				if (!Platform.isDesktopApp || !this.tracker?.currentApp) return false;
@@ -225,7 +227,7 @@ export default class TimeMeterPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "timemeter-manual-log",
+			id: "manual-log",
 			name: t("cmd.manualLog"),
 			// モバイルでも動く（デスクトップ限定ガードを付けない）。
 			callback: () => {
@@ -234,7 +236,7 @@ export default class TimeMeterPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "timemeter-lap",
+			id: "lap",
 			name: t("cmd.lap"),
 			checkCallback: (checking: boolean) => {
 				if (!Platform.isDesktopApp) return false;
@@ -345,10 +347,11 @@ export default class TimeMeterPlugin extends Plugin {
 		}
 	}
 
-	/** プラグインの設定タブを開く。 */
+	/** プラグインの設定タブを開く。型定義に無い internal API を最小インターフェースで型付けして触る。 */
 	openSettings(): void {
-		// biome-ignore lint: Obsidian の internal API（型定義に無い）にアクセスする。
-		const setting = (this.app as any).setting;
+		const { setting } = this.app as unknown as {
+			setting: { open(): void; openTabById(id: string): void };
+		};
 		setting.open();
 		setting.openTabById(this.manifest.id);
 	}
@@ -440,19 +443,18 @@ export default class TimeMeterPlugin extends Plugin {
 	 */
 	refreshStatusBar(): void {
 		if (!this.statusBarEl) return;
-		this.statusBarEl.style.display = this.settings.showStatusBar ? "" : "none";
+		this.statusBarEl.toggleClass("tm-statusbar-hidden", !this.settings.showStatusBar);
 	}
 
 	/** 1秒ごと: 現在アプリ・経過分・状態だけを反映する（I/O なし・todayTotalMin はキャッシュ値を使う）。 */
 	private updateStatusBarLive(): void {
 		if (!this.statusBarEl) return;
-		const plugin = this;
 		this.statusBarEl.setText(
 			renderStatusBarText({
-				getState: () => plugin.trackerState,
-				getCurrentApp: () => plugin.tracker?.currentApp ?? null,
-				getCurrentStart: () => plugin.tracker?.currentStart ?? null,
-				getTodayTotalMin: () => plugin.todayTotalMin,
+				getState: () => this.trackerState,
+				getCurrentApp: () => this.tracker?.currentApp ?? null,
+				getCurrentStart: () => this.tracker?.currentStart ?? null,
+				getTodayTotalMin: () => this.todayTotalMin,
 			}),
 		);
 	}
@@ -508,9 +510,15 @@ export default class TimeMeterPlugin extends Plugin {
 	private dailyNotesConfig(): { folder: string; format: string } {
 		const fallback = { folder: DAILY_FOLDER, format: "YYYY-MM-DD (ddd)" };
 		try {
-			// biome-ignore lint: Obsidian の internal API（型定義に無い）にアクセスする。
-			const opts = (this.app as any).internalPlugins?.getPluginById?.("daily-notes")?.instance
-				?.options;
+			// 型定義に無い internal API を最小インターフェースで型付けして触る。
+			const app = this.app as unknown as {
+				internalPlugins?: {
+					getPluginById?(
+						id: string,
+					): { instance?: { options?: { folder?: string; format?: string } } } | null;
+				};
+			};
+			const opts = app.internalPlugins?.getPluginById?.("daily-notes")?.instance?.options;
 			return {
 				folder: (opts?.folder ?? "").trim() || fallback.folder,
 				format: (opts?.format ?? "").trim() || fallback.format,

@@ -1,6 +1,6 @@
 {
   "name": "obsidian-timemeter",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Time tracker that auto-tracks the frontmost app and records it to Markdown (Obsidian plugin)",
   "main": "main.js",
   "scripts": {
@@ -14,7 +14,6 @@
   "author": "nauppece",
   "license": "MIT",
   "devDependencies": {
-    "builtin-modules": "^5.3.0",
     "esbuild": "^0.28.1",
     "obsidian": "^1.13.1",
     "typescript": "^7.0.2",

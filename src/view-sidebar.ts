@@ -220,7 +220,7 @@ export class TimemeterView extends ItemView {
 		this.errbarEl.appendText(` ${t("err.noPermission")} `);
 		const errLink = this.errbarEl.createEl("a", { text: t("err.howToSetUp") });
 		errLink.addEventListener("click", () => this.host.openSettings());
-		this.errbarEl.style.display = "none";
+		this.errbarEl.setCssStyles({ display: "none" });
 
 		const body = root.createDiv({ cls: "sb-body" });
 
@@ -278,7 +278,7 @@ export class TimemeterView extends ItemView {
 		this.subtabBarsBtn.addEventListener("click", () => this.selectSubtab("bars"));
 		this.subtabLanesBtn.addEventListener("click", () => this.selectSubtab("lanes"));
 		this.badgeEl = subtabsRow.createSpan({ cls: "fillin-badge" });
-		this.badgeEl.style.display = "none";
+		this.badgeEl.setCssStyles({ display: "none" });
 
 		this.barsEl = container.createDiv({ cls: "bars subview on" });
 		this.lanesEl = container.createDiv({ cls: "lanes subview" });
@@ -406,7 +406,7 @@ export class TimemeterView extends ItemView {
 		this.contentEl.setAttr("data-state", state);
 		if (this.pillLabelEl) this.pillLabelEl.setText(stateLabel(state));
 		if (this.pauseBtnEl) setIcon(this.pauseBtnEl, state === "pause" ? "play" : "pause");
-		if (this.errbarEl) this.errbarEl.style.display = state === "err" ? "block" : "none";
+		if (this.errbarEl) this.errbarEl.setCssStyles({ display: state === "err" ? "block" : "none" });
 	}
 
 	/**
@@ -581,10 +581,10 @@ export class TimemeterView extends ItemView {
 		).length;
 		if (count > 0) {
 			this.badgeEl.setText(t("badge.left", { n: count }));
-			this.badgeEl.style.display = "inline-flex";
+			this.badgeEl.setCssStyles({ display: "inline-flex" });
 		} else {
 			this.badgeEl.setText("");
-			this.badgeEl.style.display = "none";
+			this.badgeEl.setCssStyles({ display: "none" });
 		}
 	}
 
@@ -722,7 +722,7 @@ export class TimemeterView extends ItemView {
 		for (let m = lo; m <= hi; m += step) {
 			const lab = hoursTrack.createSpan({ cls: "hlabel", text: hourText(m) });
 			lab.style.left = `${((m - lo) / span) * 100}%`;
-			if (m + step > hi) lab.style.transform = "translateX(-100%)"; // 右端ラベルは内側に寄せる
+			if (m + step > hi) lab.addClass("at-end"); // 右端ラベルは内側に寄せる（CSS で translateX）
 		}
 
 		for (const app of apps) {
@@ -815,7 +815,7 @@ export class TimemeterView extends ItemView {
 			rng.setText(`${s.start} – ${isLive ? t("tip.now") : s.end} (${fmtDur(durMin(s))})${awaySuffix}`);
 			if (s.title) tip.createDiv({ cls: "ttl", text: s.title });
 			if (s.note) tip.createDiv({ cls: "nt", text: s.note });
-			tip.style.display = "block";
+			tip.setCssStyles({ display: "block" });
 			const segR = seg.getBoundingClientRect();
 			const rootR = root.getBoundingClientRect();
 			let x = segR.left - rootR.left + segR.width / 2 - tip.offsetWidth / 2;
@@ -824,7 +824,7 @@ export class TimemeterView extends ItemView {
 			tip.style.top = `${segR.top - rootR.top - tip.offsetHeight - 8}px`;
 		});
 		seg.addEventListener("mouseleave", () => {
-			tip.style.display = "none";
+			tip.setCssStyles({ display: "none" });
 		});
 	}
 

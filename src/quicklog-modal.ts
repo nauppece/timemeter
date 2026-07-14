@@ -56,8 +56,7 @@ export class QuickLogModal extends Modal {
 			this.selectEl = select;
 		}
 
-		const input = contentEl.createEl("input", { type: "text" });
-		input.style.width = "100%";
+		const input = contentEl.createEl("input", { type: "text", cls: "tm-modal-input" });
 		input.placeholder = this.placeholder;
 		input.addEventListener("keydown", (evt: KeyboardEvent) => {
 			if (evt.key === "Enter") {
@@ -67,9 +66,7 @@ export class QuickLogModal extends Modal {
 		});
 		this.inputEl = input;
 
-		const buttonRow = contentEl.createDiv();
-		buttonRow.style.marginTop = "0.75em";
-		buttonRow.style.textAlign = "right";
+		const buttonRow = contentEl.createDiv({ cls: "tm-modal-buttons" });
 		const button = buttonRow.createEl("button", { text: this.submitLabel });
 		button.addEventListener("click", () => this.submit());
 
