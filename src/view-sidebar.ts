@@ -651,7 +651,15 @@ export class TimemeterView extends ItemView {
 			return;
 		}
 
-		const visible = sessions.filter((s) => !this.host.isHidden(s.app));
+		// タイムライン表示用フィルタ。0分セッション（開始＝終了。スリープ復帰時などに
+		// 単発 poll だけ入った瞬間の記録）は最小幅0.6%の細線として大量に描かれ櫛状のノイズに
+		// なるため、時系列からは除外する。ただし手動ログ（意図的な点記録）と進行中セッション
+		// （開始直後は0分。消えると現在地が分からなくなる）は残す。合計・記録データは不変。
+		const visible = sessions.filter(
+			(s) =>
+				!this.host.isHidden(s.app) &&
+				(durMin(s) > 0 || s.manual || sessionKey(s) === opts.liveKey),
+		);
 		const totals = new Map<string, number>();
 		for (const s of visible) totals.set(s.app, (totals.get(s.app) ?? 0) + durMin(s));
 		const apps = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([a]) => a);
