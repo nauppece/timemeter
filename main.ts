@@ -680,7 +680,10 @@ export default class TimeMeterPlugin extends Plugin {
 	 * 保存されたデータ）も読めるように後方互換を持たせる。
 	 */
 	async loadSettings() {
-		const data = await this.loadData();
+		const data = (await this.loadData()) as {
+			settings?: Partial<TimemeterSettings>;
+			laps?: number[];
+		} | null;
 		if (data && (data.settings || data.laps)) {
 			this.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
 			this.laps = data.laps ?? [];
