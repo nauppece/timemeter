@@ -25,7 +25,7 @@ test("setNoteは元配列を破壊しない（新しい配列/オブジェクト
 
 test("appendManualは手動行をstart順で差し込む", () => {
 	const out = appendManual([s("09:00", "10:00", "Code")], "2026-07-09", "07:30", "08:10", "ランニング");
-	expect(out[0]).toMatchObject({ app: "✍️ 手動", start: "07:30", note: "ランニング", manual: true, away: false });
+	expect(out[0]).toMatchObject({ app: "✍️ Manual", start: "07:30", note: "ランニング", manual: true, away: false });
 	expect(out[1].app).toBe("Code");
 });
 

@@ -158,6 +158,15 @@ const EN: Dict = {
 	"set.apps.shownTip": "Shown — click to exclude",
 	"set.apps.excludedTip": "Excluded — click to show",
 
+	// セッション表の列見出し（デイリーに書き込む表・書き込み時の言語で確定）
+	"table.start": "Start",
+	"table.end": "End",
+	"table.dur": "Dur",
+	"table.app": "App",
+	"table.title": "Title",
+	"table.note": "Note",
+	"table.away": "Away",
+
 	// 埋め込み・日報
 	"embed.header": "TimeMeter",
 	"nippou.calloutHeader": "> [!note] TimeMeter draft",
@@ -298,6 +307,14 @@ const JA: Dict = {
 	"set.apps.excludedGroup": "除外中（時系列・合計から非表示）",
 	"set.apps.shownTip": "表示中 — クリックで除外",
 	"set.apps.excludedTip": "除外中 — クリックで表示",
+
+	"table.start": "開始",
+	"table.end": "終了",
+	"table.dur": "時間",
+	"table.app": "アプリ",
+	"table.title": "タイトル",
+	"table.note": "説明",
+	"table.away": "離席",
 
 	"embed.header": "タイムメーター",
 	"nippou.calloutHeader": "> [!note] タイムメーター下書き",

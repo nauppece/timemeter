@@ -5,9 +5,15 @@
 // トランスパイル後に実行時 import は残らない）。
 
 import type { App } from "obsidian";
-import { MANUAL_APP, MARKER_END, MARKER_START, durMin, fmtDur, sessionKey, toMin, type Session } from "./types";
+import { t } from "./i18n";
+import { MANUAL_APP, MARKER_END, MARKER_START, durMin, fmtDur, isManualApp, sessionKey, toMin, type Session } from "./types";
 
-const HEADER_ROW = "| 開始 | 終了 | 時間 | アプリ | タイトル | 説明 | 離席 |";
+// ヘッダーは書き込み時の言語で確定する（parse は行位置ベースなので文言に依存せず、
+// 旧・日本語ヘッダーのファイルもそのまま読める）。
+function headerRow(): string {
+	const cols = ["table.start", "table.end", "table.dur", "table.app", "table.title", "table.note", "table.away"];
+	return `| ${cols.map((k) => t(k)).join(" | ")} |`;
+}
 const SEP_ROW = "|------|------|------|--------|----------|------|------|";
 const MANAGED_FM_KEYS = new Set(["date", "total_min", "totals"]);
 
@@ -68,7 +74,7 @@ export function serializeTable(sessions: Session[]): string {
 		];
 		return `| ${cells.join(" | ")} |`;
 	});
-	return [MARKER_START, HEADER_ROW, SEP_ROW, ...rows, MARKER_END].join("\n");
+	return [MARKER_START, headerRow(), SEP_ROW, ...rows, MARKER_END].join("\n");
 }
 
 /** frontmatter の `date: ...` を拾う（無ければ ""） */
@@ -103,7 +109,9 @@ export function parseSessions(content: string): Session[] {
 		const title = titleRaw === "" ? null : titleRaw;
 		const note = noteRaw.replace(/<br>/g, "\n");
 		const away = awayRaw === "1";
-		sessions.push({ date, start, end, app, title, note, manual: app === MANUAL_APP, away });
+		// 旧ラベル "✍️ 手動" は手動として認識し、新ラベルへ正規化する（次回書き込みで表記が揃う）。
+		const manual = isManualApp(app);
+		sessions.push({ date, start, end, app: manual ? MANUAL_APP : app, title, note, manual, away });
 	}
 	return sessions;
 }

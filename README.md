@@ -102,7 +102,7 @@ date: 2026-07-09
 total_min: 125
 totals:
   "Obsidian": 80
-  "✍️ 手動": 45
+  "✍️ Manual": 45
 ---
 ```
 
@@ -114,13 +114,13 @@ Written as a Markdown table between markers in the body:
 
 ```
 <!-- timemeter:sessions:start -->
-| 開始 | 終了 | 時間 | アプリ | タイトル | 説明 | 離席 |
+| Start | End | Dur | App | Title | Note | Away |
 |------|------|------|--------|----------|------|------|
 | 09:00 | 10:15 | 1h 15m | Obsidian | note.md — Vault | Organized docs |  |
 <!-- timemeter:sessions:end -->
 ```
 
-Columns are **start / end / duration / app / title / note / away** (the headers are in Japanese). There is no dedicated "manual" column — manual logs are rows whose app is `✍️ 手動`. The **away** column holds `1` for idle spans when AFK detection is on (for the dimmed display; still counted in totals). Older 6-column files (no away column) still read fine and are upgraded on the next write.
+Columns are **start / end / duration / app / title / note / away**. The header labels follow the plugin's language setting (English above, Japanese when the language is set to 日本語); existing files are rewritten to the current language on the next write. There is no dedicated "manual" column — manual logs are rows whose app is `✍️ Manual` (older files that used `✍️ 手動` are still recognized and rewritten to `✍️ Manual` on the next write). The **away** column holds `1` for idle spans when AFK detection is on (for the dimmed display; still counted in totals). Older 6-column files (no away column) still read fine and are upgraded on the next write.
 
 - The plugin never touches text outside the markers (headings, your own notes, etc.).
 - In cells, `|` is escaped to `\|` and newlines to `<br>`; the managed-marker comment is neutralized if it ever appears inside a title.
@@ -195,7 +195,7 @@ date: today
 ```sh
 npm run dev     # esbuild watch (outputs main.js)
 npm run build   # tsc --noEmit + esbuild production build
-npm test        # vitest run (83 tests)
+npm test        # vitest run (84 tests)
 npm run deploy  # build, then deploy.sh copies main.js/manifest.json/styles.css to
                 # the folder in TIMEMETER_PLUGIN_DIR (see Install)
 ```

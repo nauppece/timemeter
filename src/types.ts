@@ -53,7 +53,15 @@ export const DEFAULT_SETTINGS: TimemeterSettings = {
 	lang: "en",
 };
 
-export const MANUAL_APP = "✍️ 手動";
+// 手動ログのアプリ名。データ（アプリ列）に埋め込まれる識別子なので言語で切り替えず固定にする。
+// 旧ラベル "✍️ 手動" は互換のため parse 時に手動として認識し、この新ラベルへ正規化する（次回書き込みで更新）。
+export const MANUAL_APP = "✍️ Manual";
+export const LEGACY_MANUAL_APPS = ["✍️ 手動"];
+
+/** アプリ名が手動ログ（現行・旧ラベル）か */
+export function isManualApp(app: string): boolean {
+	return app === MANUAL_APP || LEGACY_MANUAL_APPS.includes(app);
+}
 export const MARKER_START = "<!-- timemeter:sessions:start -->";
 export const MARKER_END = "<!-- timemeter:sessions:end -->";
 

@@ -11,7 +11,7 @@ export function setNote(sessions: Session[], key: string, note: string): Session
 	return sessions.map((s) => (sessionKey(s) === key ? { ...s, note } : s));
 }
 
-/** ✍️ 手動 行を作って start 昇順で差し込んだ新配列を返す。 */
+/** ✍️ Manual 行を作って start 昇順で差し込んだ新配列を返す。 */
 export function appendManual(sessions: Session[], date: string, start: string, end: string, note: string): Session[] {
 	const manual: Session = { date, start, end, app: MANUAL_APP, title: null, note, manual: true, away: false };
 	return [...sessions, manual].sort((a, b) => toMin(a.start) - toMin(b.start));
